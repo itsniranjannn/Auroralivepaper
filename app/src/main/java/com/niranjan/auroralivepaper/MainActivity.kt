@@ -1,42 +1,39 @@
 package com.niranjan.auroralivepaper
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.niranjan.auroralivepaper.ui.picker.WallpaperPickerScreen
-import com.niranjan.auroralivepaper.ui.preview.PreviewScreen
-import com.niranjan.auroralivepaper.ui.splash.AuroraIntroScreen
-import com.niranjan.auroralivepaper.ui.theme.AuroraLivePaperTheme
-import android.net.Uri
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromGif
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromVideo
 import com.niranjan.auroralivepaper.ui.picker.launchLiveWallpaperPicker
 import com.niranjan.auroralivepaper.ui.picker.saveWallpaperMediaPath
-import androidx.media3.common.util.UnstableApi
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-
+import com.niranjan.auroralivepaper.ui.preview.PreviewScreen
+import com.niranjan.auroralivepaper.ui.splash.AuroraIntroScreen
+import com.niranjan.auroralivepaper.ui.theme.AuroraLivePaperTheme
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
-    override fun onResume() {
-        super.onResume()
-        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-    }
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -44,10 +41,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             AuroraLivePaperTheme {
                 val navController = rememberNavController()
-                NavHost(
-                    navController = navController,
-                    startDestination = "intro"
-                ) {
+                NavHost(navController = navController, startDestination = "intro") {
+
                     composable("intro") {
                         AuroraIntroScreen(onFinished = {
                             navController.navigate("home") {
@@ -71,6 +66,11 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     ) {
+                        val haptic = LocalHapticFeedback.current
+                        LaunchedEffect(Unit) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+
                         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                             Box(
                                 modifier = Modifier.fillMaxSize().padding(innerPadding),
@@ -133,9 +133,9 @@ class MainActivity : ComponentActivity() {
                             },
                             onDismiss = { navController.popBackStack() }
                         )
-                        }
                     }
                 }
             }
         }
     }
+}
