@@ -18,6 +18,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.compose.foundation.layout.navigationBarsPadding
 
 @UnstableApi
 @Composable
@@ -72,17 +73,27 @@ fun PreviewScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(24.dp)
+                .navigationBarsPadding()
         ) {
-            Button(onClick = onSetHome, modifier = Modifier.fillMaxWidth()) {
-                Text("Set as Home Screen")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onSetLock, modifier = Modifier.fillMaxWidth()) {
-                Text("Set as Lock Screen")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = onSetBoth, modifier = Modifier.fillMaxWidth()) {
-                Text("Set as Both")
+            if (mediaType == "video" || mediaType == "gif") {
+                // Live wallpapers require the system's own Home/Lock/Both dialog —
+                // so we offer just one clear action here.
+                com.niranjan.auroralivepaper.ui.components.AuroraGradientButton(
+                    text = "Apply Wallpaper",
+                    onClick = onSetHome // reuse the existing home-apply path, which triggers the system picker
+                )
+            } else {
+                Button(onClick = onSetHome, modifier = Modifier.fillMaxWidth()) {
+                    Text("Set as Home Screen")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onSetLock, modifier = Modifier.fillMaxWidth()) {
+                    Text("Set as Lock Screen")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onSetBoth, modifier = Modifier.fillMaxWidth()) {
+                    Text("Set as Both")
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {

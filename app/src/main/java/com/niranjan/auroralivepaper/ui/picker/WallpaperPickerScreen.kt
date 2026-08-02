@@ -6,34 +6,65 @@ import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.background
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
-import androidx.compose.material3.Slider
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.niranjan.auroralivepaper.AuroraWallpaperService
-import java.io.File
+import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
+import com.niranjan.auroralivepaper.AuroraWallpaperService
+import com.niranjan.auroralivepaper.ui.components.AuroraAnimatedBackground
+import com.niranjan.auroralivepaper.ui.components.AuroraGradientButton
+import com.niranjan.auroralivepaper.ui.components.AuroraGradientText
+import com.niranjan.auroralivepaper.ui.components.PremiumMediaCard
+import com.niranjan.auroralivepaper.ui.theme.AuroraFrostedBlue
+import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
+import com.niranjan.auroralivepaper.ui.theme.AuroraStormyTeal
+import kotlinx.coroutines.delay
+import java.io.File
+
 @Composable
 @UnstableApi
 fun WallpaperPickerScreen(onPreview: (path: String, type: String) -> Unit) {
     val context = LocalContext.current
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var status by remember { mutableStateOf("") }
-    var lockFrameSeconds by remember { mutableStateOf(1f) }
+
+    var showCard1 by remember { mutableStateOf(false) }
+    var showCard2 by remember { mutableStateOf(false) }
+    var showCard3 by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(100); showCard1 = true
+        delay(80); showCard2 = true
+        delay(80); showCard3 = true
+    }
 
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -65,86 +96,162 @@ fun WallpaperPickerScreen(onPreview: (path: String, type: String) -> Unit) {
         }
     }
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(onClick = { pickImageLauncher.launch(arrayOf("image/*")) }) {
-            Text("Choose Image")
-        }
+    AuroraAnimatedBackground {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Spacer(modifier = Modifier.height(20.dp))
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        selectedBitmap?.let { bmp ->
-            Image(
-                bitmap = bmp.asImageBitmap(),
-                contentDescription = "Selected wallpaper preview",
-                modifier = Modifier
-                    .height(300.dp)
-                    .fillMaxWidth()
+            val greeting = remember {
+                val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                when {
+                    hour < 12 -> "Good Morning ☀️"
+                    hour < 18 -> "Good Afternoon ☀️"
+                    else -> "Good Evening 🌙"
+                }
+            }
+            Text(greeting, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+            AuroraGradientText("Aurora", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Every unlock, a little more yours.",
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = {
-                try {
-                    WallpaperManager.getInstance(context).setBitmap(bmp)
-                    status = "Wallpaper applied!"
-                } catch (e: Exception) {
-                    status = "Failed: ${e.message}"
+
+            Spacer(modifier = Modifier.height(28.dp))
+            Text(
+                "Choose Wallpaper",
+                color = Color.White.copy(alpha = 0.8f),
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AnimatedVisibility(
+                    visible = showCard1,
+                    modifier = Modifier.weight(1f),
+                    enter = fadeIn(tween(400)) +
+                            slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400)) +
+                            scaleIn(initialScale = 0.95f, animationSpec = tween(400))
+                ) {
+                    PremiumMediaCard(
+                        label = "Video",
+                        subtitle = "MP4 · MOV · WEBM",
+                        icon = Icons.Filled.MovieFilter,
+                        accent = AuroraRoyalViolet,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { pickVideoLauncher.launch(arrayOf("video/*")) }
+                    )
                 }
-            }) {
-                Text("Set as Wallpaper")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = { pickVideoLauncher.launch(arrayOf("video/*")) }) {
-            Text("Choose Video for Live Wallpaper")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = { pickGifLauncher.launch(arrayOf("image/gif")) }) {
-            Text("Choose GIF for Live Wallpaper")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = { launchLiveWallpaperPicker(context) }) {
-            Text("Set Aurora Live Wallpaper")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(status)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Button(onClick = {
-            val prefs = context.getSharedPreferences("aurora_prefs", android.content.Context.MODE_PRIVATE)
-            val path = prefs.getString("media_path", null)
-            val type = prefs.getString("media_type", "video")
-
-            if (path == null) {
-                status = "Pick a video or GIF first"
-            } else {
-                val success = if (type == "gif") {
-                    applyLockScreenFromGif(context, path)
-                } else {
-                    applyLockScreenFromVideo(context, path, lockFrameSeconds)
+                AnimatedVisibility(
+                    visible = showCard2,
+                    modifier = Modifier.weight(1f),
+                    enter = fadeIn(tween(400)) +
+                            slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400)) +
+                            scaleIn(initialScale = 0.95f, animationSpec = tween(400))
+                ) {
+                    PremiumMediaCard(
+                        label = "GIF",
+                        subtitle = "Animated",
+                        icon = Icons.Filled.MovieFilter,
+                        accent = AuroraStormyTeal,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { pickGifLauncher.launch(arrayOf("image/gif")) }
+                    )
                 }
-                status = if (success) "Lock screen updated!" else "Lock screen failed"
             }
-        }) {
-            Text("Set as Lock Screen")
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Lock screen frame: ${lockFrameSeconds.toInt()}s into video")
-        Slider(
-            value = lockFrameSeconds,
-            onValueChange = { lockFrameSeconds = it },
-            valueRange = 0f..30f,
-            modifier = Modifier.fillMaxWidth(0.8f)
-        )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AnimatedVisibility(
+                visible = showCard3,
+                enter = fadeIn(tween(400)) +
+                        slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400)) +
+                        scaleIn(initialScale = 0.95f, animationSpec = tween(400))
+            ) {
+                PremiumMediaCard(
+                    label = "Image",
+                    subtitle = "JPG · PNG · WEBP",
+                    icon = Icons.Filled.Add,
+                    accent = AuroraFrostedBlue,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { pickImageLauncher.launch(arrayOf("image/*")) }
+                )
+            }
+
+            AnimatedVisibility(
+                visible = selectedBitmap != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                selectedBitmap?.let { bmp ->
+                    Column {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "Selected wallpaper preview",
+                            modifier = Modifier
+                                .height(220.dp)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        AuroraGradientButton(
+                            text = "Set as Wallpaper",
+                            onClick = {
+                                try {
+                                    WallpaperManager.getInstance(context).setBitmap(bmp)
+                                    status = "Wallpaper applied!"
+                                } catch (e: Exception) {
+                                    status = "Failed: ${e.message}"
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = status.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            val infiniteShimmer = rememberInfiniteTransition(label = "brandShimmer")
+            val shimmerX by infiniteShimmer.animateFloat(
+                initialValue = -200f, targetValue = 400f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(2500, easing = LinearEasing, delayMillis = 8000),
+                    repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+                ),
+                label = "shimmerX"
+            )
+            Box(
+                modifier = Modifier.width(140.dp).height(2.dp)
+                    .background(Color.White.copy(alpha = 0.15f))
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "Developed by Niranjan.K",
+                color = Color.White.copy(alpha = 0.35f),
+                fontSize = 16.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
     }
 }
+
 @UnstableApi
 fun launchLiveWallpaperPicker(context: android.content.Context) {
     val intent = android.content.Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
@@ -153,6 +260,9 @@ fun launchLiveWallpaperPicker(context: android.content.Context) {
         android.content.ComponentName(context, AuroraWallpaperService::class.java)
     )
     context.startActivity(intent)
+    if (context is android.app.Activity) {
+        context.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
 }
 
 fun copyMediaToAppStorage(context: android.content.Context, uri: Uri, fileName: String): String {

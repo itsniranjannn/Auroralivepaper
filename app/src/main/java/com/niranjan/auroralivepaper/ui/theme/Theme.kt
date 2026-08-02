@@ -39,10 +39,11 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun AuroraLivePaperTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // force off — we want our palette, not system dynamic color
+    darkTheme: Boolean = true, // force Aurora's dark identity regardless of system setting
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current

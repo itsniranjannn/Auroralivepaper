@@ -25,9 +25,18 @@ import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromVideo
 import com.niranjan.auroralivepaper.ui.picker.launchLiveWallpaperPicker
 import com.niranjan.auroralivepaper.ui.picker.saveWallpaperMediaPath
 import androidx.media3.common.util.UnstableApi
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -35,8 +44,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             AuroraLivePaperTheme {
                 val navController = rememberNavController()
-                NavHost(navController = navController, startDestination = "intro") {
-
+                NavHost(
+                    navController = navController,
+                    startDestination = "intro"
+                ) {
                     composable("intro") {
                         AuroraIntroScreen(onFinished = {
                             navController.navigate("home") {
@@ -45,7 +56,21 @@ class MainActivity : ComponentActivity() {
                         })
                     }
 
-                    composable("home") {
+                    composable(
+                        "home",
+                        enterTransition = {
+                            fadeIn(animationSpec = tween(400)) + slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                animationSpec = tween(400)
+                            )
+                        },
+                        exitTransition = {
+                            fadeOut(animationSpec = tween(300)) + slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                animationSpec = tween(300)
+                            )
+                        }
+                    ) {
                         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                             Box(
                                 modifier = Modifier.fillMaxSize().padding(innerPadding),
@@ -65,7 +90,19 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(
                             navArgument("type") { type = NavType.StringType },
                             navArgument("path") { type = NavType.StringType; nullable = true }
-                        )
+                        ),
+                        enterTransition = {
+                            fadeIn(animationSpec = tween(400)) + slideIntoContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                animationSpec = tween(400)
+                            )
+                        },
+                        exitTransition = {
+                            fadeOut(animationSpec = tween(300)) + slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                animationSpec = tween(300)
+                            )
+                        }
                     ) { backStackEntry ->
                         val type = backStackEntry.arguments?.getString("type") ?: "video"
                         val path = backStackEntry.arguments?.getString("path")
@@ -96,9 +133,9 @@ class MainActivity : ComponentActivity() {
                             },
                             onDismiss = { navController.popBackStack() }
                         )
+                        }
                     }
                 }
             }
         }
     }
-}
