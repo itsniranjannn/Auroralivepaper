@@ -84,6 +84,12 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                    composable("settings") {
+                        com.niranjan.auroralivepaper.ui.settings.SettingsScreen(
+                            onBack = { navController.popBackStack() },
+                            onNavigate = { navController.navigate(it) }
+                        )
+                    }
 
                     composable(
                         route = "preview/{type}?path={path}",
