@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import com.niranjan.auroralivepaper.data.SettingsPrefs
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.verticalScroll
+
 @Composable
 fun BatterySettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current

@@ -10,12 +10,16 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavType
@@ -31,6 +35,12 @@ import com.niranjan.auroralivepaper.ui.picker.saveWallpaperMediaPath
 import com.niranjan.auroralivepaper.ui.preview.PreviewScreen
 import com.niranjan.auroralivepaper.ui.splash.AuroraIntroScreen
 import com.niranjan.auroralivepaper.ui.theme.AuroraLivePaperTheme
+import com.niranjan.auroralivepaper.ui.settings.SettingsScreen
+import com.niranjan.auroralivepaper.ui.settings.WallpaperSettingsScreen
+import com.niranjan.auroralivepaper.ui.settings.BatterySettingsScreen
+import com.niranjan.auroralivepaper.ui.settings.StorageSettingsScreen
+import com.niranjan.auroralivepaper.ui.settings.ExperienceSettingsScreen
+import com.niranjan.auroralivepaper.ui.settings.AboutScreen
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
@@ -81,14 +91,44 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("preview/${type}?path=${Uri.encode(path)}")
                                     }
                                 )
+
+                                IconButton(
+                                    onClick = { navController.navigate("settings") },
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 8.dp, end = 8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Settings,
+                                        contentDescription = "Settings",
+                                        tint = Color.White.copy(alpha = 0.85f)
+                                    )
+                                }
                             }
                         }
                     }
+
                     composable("settings") {
-                        com.niranjan.auroralivepaper.ui.settings.SettingsScreen(
+                        SettingsScreen(
                             onBack = { navController.popBackStack() },
                             onNavigate = { navController.navigate(it) }
                         )
+                    }
+
+                    composable("settings_wallpaper") {
+                        WallpaperSettingsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("settings_battery") {
+                        BatterySettingsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("settings_storage") {
+                        StorageSettingsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("settings_experience") {
+                        ExperienceSettingsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("settings_about") {
+                        AboutScreen(onBack = { navController.popBackStack() })
                     }
 
                     composable(

@@ -33,6 +33,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import kotlin.random.Random
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 private val NearBlack = Color(0xFF07090F)
 private val DeepPurple = Color(0xFF2D1B4E)
 private val SoftTeal = Color(0xFF1F4E4A)

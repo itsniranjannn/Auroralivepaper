@@ -47,14 +47,13 @@ class AuroraWallpaperService : WallpaperService() {
 
             if (mediaType == "gif" && savedPath != null) {
                 startGif(savedPath, holder)
-            } else {
-                val mediaUri = if (savedPath != null) {
-                    Uri.fromFile(File(savedPath))
-                } else {
-                    Uri.parse("android.resource://$packageName/${R.raw.test_video}")
-                }
-                startVideo(mediaUri, holder)
+            } else if (savedPath != null) {
+                startVideo(Uri.fromFile(File(savedPath)), holder)
             }
+            // No saved wallpaper yet -> leave the surface blank instead of
+            // falling back to a bundled sample video. The user sets a
+            // wallpaper via the app's picker before this engine has
+            // anything real to play.
         }
 
         private fun startVideo(uri: Uri, holder: SurfaceHolder) {

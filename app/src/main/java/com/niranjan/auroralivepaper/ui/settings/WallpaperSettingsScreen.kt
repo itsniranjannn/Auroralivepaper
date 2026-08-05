@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niranjan.auroralivepaper.data.SettingsPrefs
+import androidx.compose.foundation.verticalScroll
 
 @Composable
 fun WallpaperSettingsScreen(onBack: () -> Unit) {

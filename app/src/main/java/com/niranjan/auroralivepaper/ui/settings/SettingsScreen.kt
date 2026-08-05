@@ -23,7 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-
+import androidx.compose.foundation.verticalScroll
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
     val context = LocalContext.current
