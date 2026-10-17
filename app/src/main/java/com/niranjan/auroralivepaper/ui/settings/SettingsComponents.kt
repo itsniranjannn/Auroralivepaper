@@ -1,18 +1,29 @@
 package com.niranjan.auroralivepaper.ui.settings
 
+import android.content.Context
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,30 +36,46 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.clickable
+import com.niranjan.auroralivepaper.data.SettingsPrefs
 import kotlin.random.Random
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+
 private val NearBlack = Color(0xFF07090F)
 private val DeepPurple = Color(0xFF2D1B4E)
 private val SoftTeal = Color(0xFF1F4E4A)
 
+fun performAuroraHaptic(
+    context: Context,
+    haptic: HapticFeedback,
+    type: HapticFeedbackType = HapticFeedbackType.TextHandleMove
+) {
+    if (SettingsPrefs.hapticsEnabled(context)) {
+        haptic.performHapticFeedback(type)
+    }
+}
+
 @Composable
 fun SettingsAuroraBackground(content: @Composable () -> Unit) {
-    val infinite = androidx.compose.animation.core.rememberInfiniteTransition(label = "settingsFlow")
-    val drift by infinite.animateFloat(
+    val context = LocalContext.current
+    val richMotion = remember(context) { SettingsPrefs.richMotion(context) }
+
+    val infinite = rememberInfiniteTransition(label = "settingsFlow")
+    val animatedDrift by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(24000, easing = androidx.compose.animation.core.LinearEasing),
-            androidx.compose.animation.core.RepeatMode.Reverse
+        animationSpec = infiniteRepeatable(
+            tween(24000, easing = LinearEasing),
+            RepeatMode.Reverse
         ),
         label = "drift"
     )
+    val drift = if (richMotion) animatedDrift else 0f
+
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize().background(NearBlack)) {
             drawCircle(
@@ -90,6 +117,7 @@ fun SettingsCategoryCard(
     subtitle: String,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -115,7 +143,7 @@ fun SettingsCategoryCard(
             )
             .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
             .clickable(interactionSource = interaction, indication = null) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                performAuroraHaptic(context, haptic)
                 onClick()
             }
             .padding(18.dp)
@@ -141,13 +169,14 @@ fun SettingsCategoryCard(
     }
 }
 
-/** Header with a real back-arrow icon button (not a text link) + title + subtitle. */
+/** Header with a real back-arrow icon button + title + subtitle. */
 @Composable
 fun SettingsHeader(icon: ImageVector, title: String, subtitle: String, onBack: () -> Unit) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)) {
         IconButton(onClick = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            performAuroraHaptic(context, haptic)
             onBack()
         }) {
             Icon(
@@ -191,15 +220,16 @@ fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) 
 
 @Composable
 fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().clickable {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            performAuroraHaptic(context, haptic)
             onClick()
         }.padding(vertical = 8.dp)
     ) {
-        androidx.compose.material3.RadioButton(selected = selected, onClick = onClick)
+        RadioButton(selected = selected, onClick = onClick)
         Spacer(modifier = Modifier.width(8.dp))
         Text(label, color = Color.White, fontSize = 14.sp)
     }
@@ -207,13 +237,14 @@ fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun CheckRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
     ) {
-        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        Checkbox(checked = checked, onCheckedChange = {
+            performAuroraHaptic(context, haptic)
             onCheckedChange(it)
         })
         Spacer(modifier = Modifier.width(8.dp))

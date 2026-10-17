@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.niranjan.auroralivepaper.ui.picker.cleanupStagingFiles
 import java.io.File
 
 @Composable
@@ -27,18 +28,24 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var videoSize by remember { mutableStateOf(0L) }
     var gifSize by remember { mutableStateOf(0L) }
-    var imageSize by remember { mutableStateOf(0L) }
+    var tempSize by remember { mutableStateOf(0L) }
     var animateIn by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    fun refreshSizes() {
         val dir = context.filesDir
         videoSize = File(dir, "current_wallpaper_video.mp4").let { if (it.exists()) it.length() else 0L }
         gifSize = File(dir, "current_wallpaper_gif.gif").let { if (it.exists()) it.length() else 0L }
-        imageSize = 0L
+        tempSize = dir.listFiles()?.filter {
+            it.name.startsWith("staging_") || it.name.startsWith("download_temp_") || it.name.endsWith(".tmp")
+        }?.sumOf { it.length() } ?: 0L
+    }
+
+    LaunchedEffect(Unit) {
+        refreshSizes()
         animateIn = true
     }
 
-    val totalBytes = videoSize + gifSize + imageSize
+    val totalBytes = videoSize + gifSize + tempSize
     val totalMb = totalBytes / (1024f * 1024f)
     val progress by animateFloatAsState(
         targetValue = if (animateIn) (totalMb / 500f).coerceIn(0f, 1f) else 0f,
@@ -69,9 +76,9 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                StorageRow("Videos", videoSize)
-                StorageRow("GIF", gifSize)
-                StorageRow("Images", imageSize)
+                StorageRow("Active Video", videoSize)
+                StorageRow("Active GIF", gifSize)
+                StorageRow("Staging & Temp Cache", tempSize)
             }
 
             Box(
@@ -80,22 +87,20 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White.copy(alpha = 0.06f))
                     .clickable {
-                        File(context.filesDir, "current_wallpaper_video.mp4").delete()
-                        File(context.filesDir, "current_wallpaper_gif.gif").delete()
-                        videoSize = 0L
-                        gifSize = 0L
+                        cleanupStagingFiles(context)
+                        refreshSizes()
                     }
                     .padding(16.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
-                        contentDescription = "Clear Cache",
+                        contentDescription = "Clear Staging Cache",
                         tint = Color(0xFFFF7675),
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Clear Cache", color = Color(0xFFFF7675), fontWeight = FontWeight.SemiBold)
+                    Text("Clear Staging Cache", color = Color(0xFFFF7675), fontWeight = FontWeight.SemiBold)
                 }
             }
 

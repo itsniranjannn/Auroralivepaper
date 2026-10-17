@@ -25,7 +25,9 @@ import androidx.navigation.navArgument
 import com.niranjan.auroralivepaper.ui.picker.WallpaperPickerScreen
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromGif
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromVideo
+import com.niranjan.auroralivepaper.ui.picker.cleanupStagingFiles
 import com.niranjan.auroralivepaper.ui.picker.launchLiveWallpaperPicker
+import com.niranjan.auroralivepaper.ui.picker.promoteStagingToActive
 import com.niranjan.auroralivepaper.ui.picker.saveWallpaperMediaPath
 import com.niranjan.auroralivepaper.ui.preview.PreviewScreen
 import com.niranjan.auroralivepaper.ui.splash.AuroraIntroScreen
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        cleanupStagingFiles(this)
         enableEdgeToEdge()
         setContent {
             AuroraLivePaperTheme {
@@ -143,27 +146,35 @@ class MainActivity : ComponentActivity() {
                             mediaPath = path,
                             mediaType = type,
                             onSetHome = {
-                                path?.let { saveWallpaperMediaPath(this@MainActivity, it, type) }
+                                path?.let { stagingPath ->
+                                    val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                    saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                }
                                 launchLiveWallpaperPicker(this@MainActivity)
                                 navController.popBackStack()
                             },
                             onSetLock = {
-                                path?.let {
-                                    if (type == "gif") applyLockScreenFromGif(this@MainActivity, it)
-                                    else applyLockScreenFromVideo(this@MainActivity, it, 1f)
+                                path?.let { stagingPath ->
+                                    val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                    if (type == "gif") applyLockScreenFromGif(this@MainActivity, activePath)
+                                    else applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
                                 }
                                 navController.popBackStack()
                             },
                             onSetBoth = {
-                                path?.let {
-                                    saveWallpaperMediaPath(this@MainActivity, it, type)
-                                    if (type == "gif") applyLockScreenFromGif(this@MainActivity, it)
-                                    else applyLockScreenFromVideo(this@MainActivity, it, 1f)
+                                path?.let { stagingPath ->
+                                    val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                    saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                    if (type == "gif") applyLockScreenFromGif(this@MainActivity, activePath)
+                                    else applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
                                 }
                                 launchLiveWallpaperPicker(this@MainActivity)
                                 navController.popBackStack()
                             },
-                            onDismiss = { navController.popBackStack() }
+                            onDismiss = {
+                                cleanupStagingFiles(this@MainActivity)
+                                navController.popBackStack()
+                            }
                         )
                     }
                 }
