@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import kotlinx.coroutines.delay
 import kotlin.random.Random
 
@@ -259,6 +260,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
+                        fontFamily = ManropeFamily,
                         fontSize = 38.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.8.sp
@@ -271,6 +273,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
+                        fontFamily = com.niranjan.auroralivepaper.ui.theme.ManropeFamily,
                         fontSize = 38.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.8.sp

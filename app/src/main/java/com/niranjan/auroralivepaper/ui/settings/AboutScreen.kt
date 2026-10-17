@@ -9,8 +9,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     SettingsAuroraBackground {
@@ -28,7 +29,12 @@ fun AboutScreen(onBack: () -> Unit) {
                 )
             }
             SettingsSection("Open Source") {
-                listOf("Media3 (ExoPlayer)", "Jetpack Compose", "Coil", "AndroidX Navigation").forEach {
+                listOf(
+                    "Media3 (ExoPlayer)",
+                    "Jetpack Compose",
+                    "AndroidX Navigation",
+                    "Manrope typeface (SIL OFL)"
+                ).forEach {
                     Text("• $it", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
                 }
             }
@@ -42,7 +48,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 Text("✦", fontSize = 20.sp, color = Color.White.copy(alpha = 0.4f))
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    "Designed & Developed by Niranjan K",
+                    "Designed & Developed by Niranjan.K",
                     color = Color.White.copy(alpha = 0.4f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
