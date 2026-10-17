@@ -2,7 +2,9 @@ package com.niranjan.auroralivepaper.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Text
@@ -15,14 +17,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niranjan.auroralivepaper.data.SettingsPrefs
-import androidx.compose.foundation.verticalScroll
 
 @Composable
 fun WallpaperSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var rememberAudio by remember { mutableStateOf(SettingsPrefs.rememberAudioChoice(context)) }
     var resolution by remember { mutableStateOf(SettingsPrefs.resolutionMode(context)) }
-    var smoothPlayback by remember { mutableStateOf(SettingsPrefs.smoothPlayback(context)) }
     var loopAuto by remember { mutableStateOf(SettingsPrefs.loopAutomatically(context)) }
 
     SettingsAuroraBackground {
@@ -30,40 +30,44 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(20.dp)
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .verticalScroll(rememberScrollState())
         ) {
             SettingsHeader(Icons.Filled.VideoLibrary, "Wallpaper", "Control how wallpapers behave.", onBack)
 
             SettingsSection("Playback") {
-                CheckRow("Smooth playback", smoothPlayback) {
-                    smoothPlayback = it; SettingsPrefs.setSmoothPlayback(context, it)
-                }
                 CheckRow("Loop automatically", loopAuto) {
-                    loopAuto = it; SettingsPrefs.setLoopAutomatically(context, it)
+                    loopAuto = it
+                    SettingsPrefs.setLoopAutomatically(context, it)
                 }
             }
 
             SettingsSection("Resolution") {
-                RadioRow("Auto (Recommended)", resolution == "auto") {
-                    resolution = "auto"; SettingsPrefs.setResolutionMode(context, "auto")
+                RadioRow("Auto (Screen resolution)", resolution == "auto") {
+                    resolution = "auto"
+                    SettingsPrefs.setResolutionMode(context, "auto")
                 }
-                RadioRow("1080p", resolution == "1080p") {
-                    resolution = "1080p"; SettingsPrefs.setResolutionMode(context, "1080p")
+                RadioRow("1080p (Cap max height)", resolution == "1080p") {
+                    resolution = "1080p"
+                    SettingsPrefs.setResolutionMode(context, "1080p")
                 }
-                RadioRow("1440p", resolution == "1440p") {
-                    resolution = "1440p"; SettingsPrefs.setResolutionMode(context, "1440p")
+                RadioRow("1440p (Cap max height)", resolution == "1440p") {
+                    resolution = "1440p"
+                    SettingsPrefs.setResolutionMode(context, "1440p")
                 }
                 RadioRow("Original", resolution == "original") {
-                    resolution = "original"; SettingsPrefs.setResolutionMode(context, "original")
+                    resolution = "original"
+                    SettingsPrefs.setResolutionMode(context, "original")
                 }
             }
 
-            SettingsSection("Behavior") {
+            SettingsSection("Audio") {
                 RadioRow("Muted by default", !rememberAudio) {
-                    rememberAudio = false; SettingsPrefs.setRememberAudioChoice(context, false)
+                    rememberAudio = false
+                    SettingsPrefs.setRememberAudioChoice(context, false)
                 }
-                RadioRow("Remember last audio choice", rememberAudio) {
-                    rememberAudio = true; SettingsPrefs.setRememberAudioChoice(context, true)
+                RadioRow("Enable audio output", rememberAudio) {
+                    rememberAudio = true
+                    SettingsPrefs.setRememberAudioChoice(context, true)
                 }
             }
 

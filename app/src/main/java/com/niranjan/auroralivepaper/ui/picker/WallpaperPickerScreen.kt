@@ -1,7 +1,15 @@
 package com.niranjan.auroralivepaper.ui.picker
 
+import android.R
+import android.app.Activity
 import android.app.WallpaperManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Movie
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -12,20 +20,18 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.foundation.background
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MovieFilter
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,10 +54,15 @@ import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
 import com.niranjan.auroralivepaper.ui.theme.AuroraStormyTeal
 import kotlinx.coroutines.delay
 import java.io.File
+import java.io.FileInputStream
+import java.util.Calendar
 
 @Composable
 @UnstableApi
-fun WallpaperPickerScreen(onPreview: (path: String, type: String) -> Unit) {
+fun WallpaperPickerScreen(
+    onPreview: (path: String, type: String) -> Unit,
+    onOpenSettings: () -> Unit = {}
+) {
     val context = LocalContext.current
     var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var status by remember { mutableStateOf("") }
@@ -105,16 +116,39 @@ fun WallpaperPickerScreen(onPreview: (path: String, type: String) -> Unit) {
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
-            val greeting = remember {
-                val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-                when {
-                    hour < 12 -> "Good Morning ☀️"
-                    hour < 18 -> "Good Afternoon ☀️"
-                    else -> "Good Evening 🌙"
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    val greeting = remember {
+                        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                        when {
+                            hour < 12 -> "Good Morning"
+                            hour < 18 -> "Good Afternoon"
+                            else -> "Good Evening"
+                        }
+                    }
+                    Text(greeting, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                    AuroraGradientText("Aurora", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                }
+
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = Color.White.copy(alpha = 0.9f)
+                    )
                 }
             }
-            Text(greeting, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
-            AuroraGradientText("Aurora", fontSize = 34.sp, fontWeight = FontWeight.Bold)
+
             Text(
                 "Every unlock, a little more yours.",
                 color = Color.White.copy(alpha = 0.55f),
@@ -228,22 +262,13 @@ fun WallpaperPickerScreen(onPreview: (path: String, type: String) -> Unit) {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            val infiniteShimmer = rememberInfiniteTransition(label = "brandShimmer")
-            val shimmerX by infiniteShimmer.animateFloat(
-                initialValue = -200f, targetValue = 400f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(2500, easing = LinearEasing, delayMillis = 8000),
-                    repeatMode = androidx.compose.animation.core.RepeatMode.Restart
-                ),
-                label = "shimmerX"
-            )
             Box(
                 modifier = Modifier.width(140.dp).height(2.dp)
                     .background(Color.White.copy(alpha = 0.15f))
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "Developed by Niranjan.K",
+                "Built by Niranjan.K",
                 color = Color.White.copy(alpha = 0.35f),
                 fontSize = 16.sp
             )
@@ -253,19 +278,19 @@ fun WallpaperPickerScreen(onPreview: (path: String, type: String) -> Unit) {
 }
 
 @UnstableApi
-fun launchLiveWallpaperPicker(context: android.content.Context) {
-    val intent = android.content.Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+fun launchLiveWallpaperPicker(context: Context) {
+    val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
     intent.putExtra(
         WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-        android.content.ComponentName(context, AuroraWallpaperService::class.java)
+        ComponentName(context, AuroraWallpaperService::class.java)
     )
     context.startActivity(intent)
-    if (context is android.app.Activity) {
-        context.overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+    if (context is Activity) {
+        context.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
     }
 }
 
-fun copyMediaToAppStorage(context: android.content.Context, uri: Uri, fileName: String): String {
+fun copyMediaToAppStorage(context: Context, uri: Uri, fileName: String): String {
     val inputStream = context.contentResolver.openInputStream(uri)
     val outputFile = File(context.filesDir, fileName)
     inputStream?.use { input ->
@@ -276,17 +301,17 @@ fun copyMediaToAppStorage(context: android.content.Context, uri: Uri, fileName: 
     return outputFile.absolutePath
 }
 
-fun saveWallpaperMediaPath(context: android.content.Context, path: String, type: String) {
-    val prefs = context.getSharedPreferences("aurora_prefs", android.content.Context.MODE_PRIVATE)
+fun saveWallpaperMediaPath(context: Context, path: String, type: String) {
+    val prefs = context.getSharedPreferences("aurora_prefs", Context.MODE_PRIVATE)
     prefs.edit()
         .putString("media_path", path)
         .putString("media_type", type)
         .apply()
 }
 
-fun applyLockScreenFromVideo(context: android.content.Context, videoPath: String, seconds: Float): Boolean {
+fun applyLockScreenFromVideo(context: Context, videoPath: String, seconds: Float): Boolean {
     return try {
-        val retriever = android.media.MediaMetadataRetriever()
+        val retriever = MediaMetadataRetriever()
         retriever.setDataSource(videoPath)
         val micros = (seconds * 1_000_000).toLong()
         val frame = retriever.getFrameAtTime(micros)
@@ -301,12 +326,12 @@ fun applyLockScreenFromVideo(context: android.content.Context, videoPath: String
     }
 }
 
-fun applyLockScreenFromGif(context: android.content.Context, gifPath: String): Boolean {
+fun applyLockScreenFromGif(context: Context, gifPath: String): Boolean {
     return try {
-        val movie = android.graphics.Movie.decodeStream(java.io.FileInputStream(gifPath))
+        val movie = Movie.decodeStream(FileInputStream(gifPath))
         if (movie != null) {
             val bitmap = Bitmap.createBitmap(movie.width(), movie.height(), Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bitmap)
+            val canvas = Canvas(bitmap)
             movie.setTime(0)
             movie.draw(canvas, 0f, 0f)
             WallpaperManager.getInstance(context)

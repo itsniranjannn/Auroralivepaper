@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import com.niranjan.auroralivepaper.data.SettingsPrefs
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 
 @Composable
@@ -26,7 +27,7 @@ fun BatterySettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(20.dp)
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .verticalScroll(rememberScrollState())
         ) {
             SettingsHeader(Icons.Filled.BatteryChargingFull, "Battery & Performance", "Manage power usage.", onBack)
 

@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import kotlin.random.Random
-import androidx.compose.ui.unit.dp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 private val NearBlack = Color(0xFF07090F)
@@ -152,7 +151,7 @@ fun SettingsHeader(icon: ImageVector, title: String, subtitle: String, onBack: (
             onBack()
         }) {
             Icon(
-                androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
                 tint = Color.White.copy(alpha = 0.85f)
             )

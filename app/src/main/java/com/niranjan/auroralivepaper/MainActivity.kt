@@ -10,16 +10,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavType
@@ -83,27 +78,18 @@ class MainActivity : ComponentActivity() {
 
                         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                             Box(
-                                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                                contentAlignment = Alignment.Center
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(innerPadding)
                             ) {
                                 WallpaperPickerScreen(
                                     onPreview = { path, type ->
                                         navController.navigate("preview/${type}?path=${Uri.encode(path)}")
+                                    },
+                                    onOpenSettings = {
+                                        navController.navigate("settings")
                                     }
                                 )
-
-                                IconButton(
-                                    onClick = { navController.navigate("settings") },
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = 8.dp, end = 8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Settings,
-                                        contentDescription = "Settings",
-                                        tint = Color.White.copy(alpha = 0.85f)
-                                    )
-                                }
                             }
                         }
                     }

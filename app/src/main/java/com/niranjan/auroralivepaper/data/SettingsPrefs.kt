@@ -21,7 +21,6 @@ object SettingsPrefs {
 
     private const val KEY_REMEMBER_AUDIO_CHOICE = "remember_audio_choice"
     private const val KEY_RESOLUTION_MODE = "resolution_mode"
-    private const val KEY_SMOOTH_PLAYBACK = "smooth_playback"
     private const val KEY_LOOP_AUTOMATICALLY = "loop_automatically"
 
     private fun prefs(context: Context) =
@@ -81,13 +80,6 @@ object SettingsPrefs {
 
     fun setResolutionMode(context: Context, value: String) {
         prefs(context).edit().putString(KEY_RESOLUTION_MODE, value).apply()
-    }
-
-    fun smoothPlayback(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_SMOOTH_PLAYBACK, true)
-
-    fun setSmoothPlayback(context: Context, value: Boolean) {
-        prefs(context).edit().putBoolean(KEY_SMOOTH_PLAYBACK, value).apply()
     }
 
     fun loopAutomatically(context: Context): Boolean =

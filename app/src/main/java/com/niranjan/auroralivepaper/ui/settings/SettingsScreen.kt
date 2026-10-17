@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 @Composable
 fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
@@ -52,7 +53,7 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(20.dp)
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .verticalScroll(rememberScrollState())
         ) {
             // Hero header
             Spacer(modifier = Modifier.height(20.dp))
