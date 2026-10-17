@@ -38,6 +38,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Gif
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MovieFilter
@@ -95,7 +97,6 @@ fun WallpaperPickerScreen(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
 
-    var selectedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var status by remember { mutableStateOf("") }
 
     var showHeader by remember { mutableStateOf(false) }
@@ -108,8 +109,8 @@ fun WallpaperPickerScreen(
     var recentsList by remember { mutableStateOf(getRecentWallpapers(context)) }
 
     val prefs = remember { context.getSharedPreferences("aurora_prefs", Context.MODE_PRIVATE) }
-    val activePath = prefs.getString("media_path", null)
-    val activeType = prefs.getString("media_type", "video")
+    var activePath by remember { mutableStateOf(prefs.getString("media_path", null)) }
+    var activeType by remember { mutableStateOf(prefs.getString("media_type", "video")) }
 
     LaunchedEffect(Unit) {
         delay(40); showHeader = true
@@ -122,9 +123,8 @@ fun WallpaperPickerScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
-            val bitmap = MediaStore.Images.Media.getBitmap(context.contentResolver, it)
-            selectedBitmap = bitmap
-            status = "Image loaded — preview below"
+            val stagingPath = copyMediaToAppStorage(context, it, "staging_wallpaper_image.jpg")
+            onPreview(stagingPath, "image")
         }
     }
 
@@ -171,7 +171,7 @@ fun WallpaperPickerScreen(
                                 mime.contains("image", ignoreCase = true) -> "image"
                                 else -> "video"
                             }
-                            val ext = if (type == "gif") "gif" else "mp4"
+                            val ext = if (type == "gif") "gif" else if (type == "image") "jpg" else "mp4"
                             val stagingPath = copyMediaToAppStorage(context, uri, "staging_drag_drop.$ext")
                             onPreview(stagingPath, type)
                             return true
@@ -257,10 +257,18 @@ fun WallpaperPickerScreen(
                         activePath = activePath,
                         activeType = activeType ?: "video",
                         onClick = {
-                            if (activePath != null && File(activePath).exists()) {
+                            val path = activePath
+                            if (path != null && File(path).exists()) {
                                 performAuroraHaptic(context, haptic)
-                                onPreview(activePath, activeType ?: "video")
+                                onPreview(path, activeType ?: "video")
                             }
+                        },
+                        onClear = {
+                            performAuroraHaptic(context, haptic)
+                            activePath?.let { File(it).delete() }
+                            prefs.edit().remove("media_path").remove("media_type").putLong("media_version", System.currentTimeMillis()).apply()
+                            activePath = null
+                            status = "Wallpaper cleared"
                         }
                     )
                 }
@@ -303,19 +311,26 @@ fun WallpaperPickerScreen(
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 recentsList.forEach { recent ->
-                                    RecentCard(recent) {
-                                        performAuroraHaptic(context, haptic)
-                                        if (File(recent.path).exists()) {
-                                            onPreview(recent.path, recent.type)
-                                        } else {
-                                            status = "Media file no longer available"
+                                    RecentCard(
+                                        recent = recent,
+                                        onClick = {
+                                            performAuroraHaptic(context, haptic)
+                                            if (File(recent.path).exists()) {
+                                                onPreview(recent.path, recent.type)
+                                            } else {
+                                                status = "Media file no longer available"
+                                            }
+                                        },
+                                        onDelete = {
+                                            performAuroraHaptic(context, haptic)
+                                            removeRecentWallpaper(context, recent.path)
+                                            recentsList = getRecentWallpapers(context)
                                         }
-                                    }
+                                    )
                                 }
                             }
                             Spacer(modifier = Modifier.height(22.dp))
@@ -390,41 +405,8 @@ fun WallpaperPickerScreen(
                     }
                 }
 
-                // Selected Bitmap preview if set directly
-                AnimatedVisibility(
-                    visible = selectedBitmap != null,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    selectedBitmap?.let { bmp ->
-                        Column {
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Image(
-                                bitmap = bmp.asImageBitmap(),
-                                contentDescription = "Selected wallpaper preview",
-                                modifier = Modifier
-                                    .height(220.dp)
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(20.dp))
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            AuroraGradientButton(
-                                text = "Set as Wallpaper",
-                                onClick = {
-                                    try {
-                                        WallpaperManager.getInstance(context).setBitmap(bmp)
-                                        status = "Wallpaper applied!"
-                                    } catch (e: Exception) {
-                                        status = "Failed: ${e.message}"
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-
                 if (status.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
                 }
 
@@ -512,25 +494,6 @@ fun WallpaperPickerScreen(
                                 }
 
                                 val maxAllowedBytes = 100L * 1024L * 1024L // 100 MB
-
-                                val isGif = contentType.contains("gif", ignoreCase = true) || currentUrlStr.endsWith(".gif", ignoreCase = true)
-                                val isVideo = contentType.contains("video", ignoreCase = true) || currentUrlStr.endsWith(".mp4", ignoreCase = true) || currentUrlStr.endsWith(".webm", ignoreCase = true) || currentUrlStr.endsWith(".mov", ignoreCase = true)
-                                val isImage = contentType.contains("image", ignoreCase = true)
-
-                                if (!isGif && !isVideo && !isImage) {
-                                    withContext(Dispatchers.Main) {
-                                        onError("Unsupported media type: expected video, GIF, or image.")
-                                    }
-                                    return@launch
-                                }
-
-                                val type = when {
-                                    isGif -> "gif"
-                                    isVideo -> "video"
-                                    else -> "image"
-                                }
-
-                                val ext = if (type == "gif") "gif" else if (type == "video") "mp4" else "jpg"
                                 tempFile = File(context.filesDir, "download_temp_${System.currentTimeMillis()}.tmp")
 
                                 withContext(Dispatchers.Main) {
@@ -553,12 +516,23 @@ fun WallpaperPickerScreen(
                                     }
                                 }
 
+                                // Inspect file content for media type (extension or magic bytes)
+                                val detectedType = detectMediaType(tempFile, contentType, currentUrlStr)
+                                if (detectedType == null) {
+                                    tempFile.delete()
+                                    withContext(Dispatchers.Main) {
+                                        onError("Unsupported media format. Expected Video, GIF, or Image.")
+                                    }
+                                    return@launch
+                                }
+
+                                val ext = if (detectedType == "gif") "gif" else if (detectedType == "video") "mp4" else "jpg"
                                 val stagingFile = File(context.filesDir, "staging_url_wallpaper.$ext")
                                 tempFile.renameTo(stagingFile)
 
                                 withContext(Dispatchers.Main) {
                                     showUrlDialog = false
-                                    onPreview(stagingFile.absolutePath, type)
+                                    onPreview(stagingFile.absolutePath, detectedType)
                                 }
                             } catch (e: Exception) {
                                 tempFile?.delete()
@@ -574,11 +548,41 @@ fun WallpaperPickerScreen(
     }
 }
 
+private fun detectMediaType(file: File, contentType: String, urlStr: String): String? {
+    if (contentType.contains("gif", ignoreCase = true) || urlStr.endsWith(".gif", ignoreCase = true)) return "gif"
+    if (contentType.contains("video", ignoreCase = true) || urlStr.endsWith(".mp4", ignoreCase = true) || urlStr.endsWith(".webm", ignoreCase = true) || urlStr.endsWith(".mov", ignoreCase = true)) return "video"
+    if (contentType.contains("image", ignoreCase = true) || urlStr.endsWith(".jpg", ignoreCase = true) || urlStr.endsWith(".png", ignoreCase = true) || urlStr.endsWith(".webp", ignoreCase = true)) return "image"
+
+    // Magic bytes fallback inspection
+    if (file.exists() && file.length() > 12) {
+        try {
+            val bytes = ByteArray(12)
+            FileInputStream(file).use { it.read(bytes) }
+            val headerHex = bytes.joinToString("") { "%02X".format(it) }
+
+            // GIF: "GIF87a" or "GIF89a" -> 47 49 46 38
+            if (headerHex.startsWith("47494638")) return "gif"
+            // PNG: 89 50 4E 47
+            if (headerHex.startsWith("89504E47")) return "image"
+            // JPEG: FF D8 FF
+            if (headerHex.startsWith("FFD8FF")) return "image"
+            // WEBP: RIFF ... WEBP -> 52 49 46 46 ... 57 45 42 50
+            if (headerHex.startsWith("52494646") && headerHex.contains("57454250")) return "image"
+            // MP4 / MOV: ftyp / moov -> 66 74 79 70
+            if (headerHex.contains("66747970") || headerHex.contains("1A45DFA3")) return "video"
+        } catch (_: Exception) {}
+    }
+
+    // Default fallback to video if length > 0
+    return if (file.length() > 0) "video" else null
+}
+
 @Composable
 private fun HeroNowPlayingCard(
     activePath: String?,
     activeType: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onClear: () -> Unit
 ) {
     val context = LocalContext.current
     val richMotion = remember(context) { SettingsPrefs.richMotion(context) }
@@ -618,22 +622,38 @@ private fun HeroNowPlayingCard(
                 Text("Now Playing", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
 
                 if (activePath != null && File(activePath).exists()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
-                            .border(1.dp, Color(0xFF7CE7D7).copy(alpha = 0.4f), RoundedCornerShape(50))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Box(
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF7CE7D7).copy(alpha = pulseAlpha))
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Active", color = Color(0xFF7CE7D7), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
+                                .border(1.dp, Color(0xFF7CE7D7).copy(alpha = 0.4f), RoundedCornerShape(50))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF7CE7D7).copy(alpha = pulseAlpha))
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Active", color = Color(0xFF7CE7D7), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.DeleteOutline,
+                                contentDescription = "Remove Wallpaper",
+                                tint = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -681,11 +701,12 @@ private fun HeroNowPlayingCard(
 @Composable
 private fun RecentCard(
     recent: RecentWallpaper,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .width(110.dp)
+            .width(115.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(Color.White.copy(alpha = 0.06f))
             .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(18.dp))
@@ -693,20 +714,39 @@ private fun RecentCard(
             .padding(12.dp)
     ) {
         Column(horizontalAlignment = Alignment.Start) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                val icon = when (recent.type) {
-                    "gif" -> Icons.Filled.Gif
-                    "image" -> Icons.Filled.Add
-                    else -> Icons.Filled.MovieFilter
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val icon = when (recent.type) {
+                        "gif" -> Icons.Filled.Gif
+                        "image" -> Icons.Filled.Add
+                        else -> Icons.Filled.MovieFilter
+                    }
+                    Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(18.dp))
                 }
-                Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(20.dp))
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(22.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Remove recent",
+                        tint = Color.White.copy(alpha = 0.4f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
+
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = recent.type.uppercase(),
@@ -807,6 +847,19 @@ fun getRecentWallpapers(context: Context): List<RecentWallpaper> {
         }
     }
     return list
+}
+
+fun removeRecentWallpaper(context: Context, path: String) {
+    val current = getRecentWallpapers(context).filter { it.path != path }
+    File(path).delete()
+    val prefs = context.getSharedPreferences("aurora_recents_prefs", Context.MODE_PRIVATE).edit()
+    prefs.clear()
+    current.forEachIndexed { index, recent ->
+        prefs.putString("recent_${index}_path", recent.path)
+        prefs.putString("recent_${index}_type", recent.type)
+        prefs.putLong("recent_${index}_time", recent.timestamp)
+    }
+    prefs.apply()
 }
 
 fun addRecentWallpaper(context: Context, path: String, type: String) {

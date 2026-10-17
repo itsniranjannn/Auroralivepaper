@@ -3,13 +3,16 @@ package com.niranjan.auroralivepaper.ui.splash
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -25,20 +28,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import kotlinx.coroutines.delay
+import kotlin.math.sin
 import kotlin.random.Random
 
 private val NearBlack = Color(0xFF07090F)
 private val DeepPurple = Color(0xFF2D1B4E)
 private val Violet = Color(0xFF4A2E7A)
 private val MidnightBlue = Color(0xFF1B2A4E)
-private val AuroraGreen = Color(0xFF2E7A5C)   // classic aurora borealis green
+private val AuroraGreen = Color(0xFF2E7A5C)
 private val Cyan = Color(0xFF2C6E7A)
 private val SoftTeal = Color(0xFF1F4E4A)
-private val PinkEdge = Color(0xFF7A3E6E)      // faint pink edge glow, real auroras have this
+private val PinkEdge = Color(0xFF7A3E6E)
 
 private object Motion {
     const val BgIn = 400
-    const val LogoIn = 900
+    const val LogoIn = 800
     const val TitleIn = 300
     const val SubtitleIn = 300
     const val ExitFade = 600
@@ -67,13 +71,11 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
         animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
         label = "loaderProgress"
     )
-    // moving gradient shift for the "Aurora" title — like light passing through it
     val titleShift by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Reverse),
         label = "titleShift"
     )
-    // twinkle cycle for stars — each star uses a phase offset off this
     val twinkle by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Reverse),
@@ -100,21 +102,20 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
         label = "titleAlpha"
     )
     val subtitleAlpha by animateFloatAsState(
-        targetValue = if (subtitleVisible) 0.6f else 0f,
+        targetValue = if (subtitleVisible) 0.65f else 0f,
         animationSpec = tween(Motion.SubtitleIn),
         label = "subtitleAlpha"
     )
 
     val particles = remember { List(3) { Pair(Random.nextFloat(), Random.nextFloat()) } }
 
-    // stars scattered near the top third of the screen, each with its own twinkle phase + size
     val stars = remember {
         val seed = Random(7)
         List(9) {
             Triple(
-                seed.nextFloat(),                     // x (0..1)
-                seed.nextFloat() * 0.28f,              // y (top ~28% of screen)
-                seed.nextFloat()                       // phase offset (0..1)
+                seed.nextFloat(),
+                seed.nextFloat() * 0.28f,
+                seed.nextFloat()
             )
         }
     }
@@ -167,7 +168,6 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 }
             }
 
-            // Richer, more authentic aurora palette — green-dominant with purple/pink/teal accents
             drawRibbon(AuroraGreen.copy(alpha = 0.34f), size.width * (0.2f + blobDrift * 0.15f), size.height * 0.18f, size.minDimension * 0.55f, 2.6f, -18f)
             drawRibbon(DeepPurple.copy(alpha = 0.30f), size.width * (0.1f + blobDrift * 0.12f), size.height * 0.32f, size.minDimension * 0.5f, 2.3f, -22f)
             drawRibbon(Violet.copy(alpha = 0.26f), size.width * (0.42f + blobDrift * 0.1f), size.height * 0.42f, size.minDimension * 0.45f, 2.5f, 15f)
@@ -177,7 +177,6 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
             drawRibbon(SoftTeal.copy(alpha = 0.28f), size.width * (0.85f - blobDrift * 0.15f), size.height * 0.88f, size.minDimension * 0.45f, 2.2f, -15f)
             drawRibbon(PinkEdge.copy(alpha = 0.14f), size.width * (0.3f + blobDrift * 0.1f), size.height * 0.25f, size.minDimension * 0.4f, 2.8f, -25f)
 
-            // grain
             val grainSeed = Random(42)
             repeat(140) {
                 drawCircle(
@@ -187,10 +186,9 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 )
             }
 
-            // twinkling stars near the top
             stars.forEach { (sx, sy, phase) ->
                 val localTwinkle = ((twinkle + phase) % 1f)
-                val starAlpha = (kotlin.math.sin(localTwinkle * Math.PI).toFloat()).coerceIn(0.1f, 1f) * 0.7f
+                val starAlpha = (sin(localTwinkle * Math.PI).toFloat()).coerceIn(0.1f, 1f) * 0.7f
                 val starSize = (1.2f + 1.3f * starAlpha)
                 drawCircle(
                     color = Color.White.copy(alpha = starAlpha),
@@ -247,9 +245,9 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Aurora title: MOVING gradient brush (light shifting through it) + soft glow duplicate
+            // Aurora title with Manrope font
             Box {
                 val movingAuroraBrush = Brush.linearGradient(
                     colors = listOf(Color(0xFFB38CFF), Color(0xFF7CE7D7), Color(0xFF93B5FF), Color(0xFFB38CFF)),
@@ -261,9 +259,9 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 38.sp,
+                        fontSize = 42.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 1.sp
                     ),
                     modifier = Modifier
                         .alpha(titleAlpha * 0.35f)
@@ -273,10 +271,10 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
-                        fontFamily = com.niranjan.auroralivepaper.ui.theme.ManropeFamily,
-                        fontSize = 38.sp,
+                        fontFamily = ManropeFamily,
+                        fontSize = 42.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = 1.sp
                     ),
                     modifier = Modifier.alpha(titleAlpha)
                 )
@@ -285,23 +283,25 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Bring your screen\nto life.",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.4.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp,
-                color = Color.White.copy(alpha = subtitleAlpha)
+                text = "Bring your screen to life.",
+                style = TextStyle(
+                    fontFamily = ManropeFamily,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    letterSpacing = 0.4.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.White.copy(alpha = subtitleAlpha)
+                )
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             if (showLoading) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     for (i in 0..2) {
                         val phase = (loaderProgress - i).let { if (it < 0) it + 3 else it }
                         val pulse = when {
-                            phase < 1f -> kotlin.math.sin(phase * Math.PI).toFloat().coerceIn(0f, 1f)
+                            phase < 1f -> sin(phase * Math.PI).toFloat().coerceIn(0f, 1f)
                             else -> 0f
                         }
                         val dotSize = 6.dp + (4.dp * pulse)
@@ -313,6 +313,26 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     }
                 }
             }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 36.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.White.copy(alpha = 0.06f))
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(50))
+                .padding(horizontal = 14.dp, vertical = 6.dp)
+        ) {
+            Text(
+                text = "Built by Niranjan.K",
+                style = TextStyle(
+                    fontFamily = ManropeFamily,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.45f)
+                )
+            )
         }
     }
 }
