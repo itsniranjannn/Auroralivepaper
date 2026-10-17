@@ -4,8 +4,8 @@ import android.content.Context
 
 /**
  * Lightweight SharedPreferences-backed settings store for Aurora Live Paper.
- * Uses a dedicated prefs file so it never collides with the wallpaper-state
- * prefs ("aurora_prefs") used by AuroraWallpaperService / SettingsScreen.
+ * Uses a dedicated prefs file ("aurora_settings_prefs") so it never collides
+ * with the wallpaper-state prefs ("aurora_prefs").
  */
 object SettingsPrefs {
 
@@ -19,7 +19,7 @@ object SettingsPrefs {
     private const val KEY_HAPTICS_ENABLED = "haptics_enabled"
     private const val KEY_RICH_MOTION = "rich_motion"
 
-    private const val KEY_REMEMBER_AUDIO_CHOICE = "remember_audio_choice"
+    private const val KEY_PLAY_WALLPAPER_SOUND = "play_wallpaper_sound"
     private const val KEY_RESOLUTION_MODE = "resolution_mode"
     private const val KEY_LOOP_AUTOMATICALLY = "loop_automatically"
 
@@ -67,11 +67,11 @@ object SettingsPrefs {
 
     // ---------- Wallpaper Playback ----------
 
-    fun rememberAudioChoice(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_REMEMBER_AUDIO_CHOICE, false)
+    fun playWallpaperSound(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_PLAY_WALLPAPER_SOUND, false)
 
-    fun setRememberAudioChoice(context: Context, value: Boolean) {
-        prefs(context).edit().putBoolean(KEY_REMEMBER_AUDIO_CHOICE, value).apply()
+    fun setPlayWallpaperSound(context: Context, value: Boolean) {
+        prefs(context).edit().putBoolean(KEY_PLAY_WALLPAPER_SOUND, value).apply()
     }
 
     /** One of: "auto", "1080p", "1440p", "original" */

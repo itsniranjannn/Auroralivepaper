@@ -21,7 +21,7 @@ import com.niranjan.auroralivepaper.data.SettingsPrefs
 @Composable
 fun WallpaperSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    var rememberAudio by remember { mutableStateOf(SettingsPrefs.rememberAudioChoice(context)) }
+    var playSound by remember { mutableStateOf(SettingsPrefs.playWallpaperSound(context)) }
     var resolution by remember { mutableStateOf(SettingsPrefs.resolutionMode(context)) }
     var loopAuto by remember { mutableStateOf(SettingsPrefs.loopAutomatically(context)) }
 
@@ -41,34 +41,40 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                 }
             }
 
-            SettingsSection("Resolution") {
-                RadioRow("Auto (Screen resolution)", resolution == "auto") {
+            SettingsSection("Resolution Cap") {
+                RadioRow("Auto (Screen size)", resolution == "auto") {
                     resolution = "auto"
                     SettingsPrefs.setResolutionMode(context, "auto")
                 }
-                RadioRow("1080p (Cap max height)", resolution == "1080p") {
+                RadioRow("1080p (Max 1920 height)", resolution == "1080p") {
                     resolution = "1080p"
                     SettingsPrefs.setResolutionMode(context, "1080p")
                 }
-                RadioRow("1440p (Cap max height)", resolution == "1440p") {
+                RadioRow("1440p (Max 2560 height)", resolution == "1440p") {
                     resolution = "1440p"
                     SettingsPrefs.setResolutionMode(context, "1440p")
                 }
-                RadioRow("Original", resolution == "original") {
-                    resolution = "original"
-                    SettingsPrefs.setResolutionMode(context, "original")
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Limits the render surface size to reduce GPU load. It doesn't change the video file itself.",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
 
             SettingsSection("Audio") {
-                RadioRow("Muted by default", !rememberAudio) {
-                    rememberAudio = false
-                    SettingsPrefs.setRememberAudioChoice(context, false)
+                CheckRow("Play wallpaper sound", playSound) {
+                    playSound = it
+                    SettingsPrefs.setPlayWallpaperSound(context, it)
                 }
-                RadioRow("Enable audio output", rememberAudio) {
-                    rememberAudio = true
-                    SettingsPrefs.setRememberAudioChoice(context, true)
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Note: Wallpaper audio plays alongside background media without requesting audio focus.",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
 
             Box(

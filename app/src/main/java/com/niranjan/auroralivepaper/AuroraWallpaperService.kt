@@ -16,8 +16,10 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.SurfaceHolder
 import android.view.WindowManager
+import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
@@ -31,7 +33,7 @@ class AuroraWallpaperService : WallpaperService() {
 
     override fun onCreateEngine(): Engine = AuroraEngine()
 
-    inner class AuroraEngine : Engine(), SharedPreferences.OnSharedPreferenceChangeListener {
+    inner class AuroraEngine : Engine() {
 
         private var player: ExoPlayer? = null
         private var gifMovie: Movie? = null
@@ -43,19 +45,41 @@ class AuroraWallpaperService : WallpaperService() {
         private var isVisible = false
         private var isPowerSave = false
         private var isBatteryLow = false
+        private var receiverRegistered = false
 
-        private val batteryReceiver = object : BroadcastReceiver() {
+        private val settingsPrefs by lazy {
+            applicationContext.getSharedPreferences("aurora_settings_prefs", MODE_PRIVATE)
+        }
+        private val mediaPrefs by lazy {
+            applicationContext.getSharedPreferences("aurora_prefs", MODE_PRIVATE)
+        }
+
+        // Strong references so the listeners are not garbage collected
+        private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            currentHolder?.let { applyResolutionCap(it) }
+            updatePlayerSettings()
+            refreshPowerState()
+            updatePlaybackState()
+        }
+
+        // media_version is written on every save, so reacting to it alone avoids triple reloads
+        private val mediaListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "media_version") {
+                currentHolder?.let { loadWallpaper(it) }
+            }
+        }
+
+        private val powerReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                when (intent?.action) {
+                if (intent == null) return
+                when (intent.action) {
                     PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
-                        checkPowerSaveState()
-                        updatePlaybackState()
+                        val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
+                        isPowerSave = pm?.isPowerSaveMode == true
                     }
-                    Intent.ACTION_BATTERY_CHANGED -> {
-                        intent.let { checkBatteryLevel(it) }
-                        updatePlaybackState()
-                    }
+                    Intent.ACTION_BATTERY_CHANGED -> updateBatteryLow(intent)
                 }
+                updatePlaybackState()
             }
         }
 
@@ -63,36 +87,21 @@ class AuroraWallpaperService : WallpaperService() {
             override fun run() {
                 if (!gifRunning) return
                 drawGifFrame()
-                if (gifRunning) {
-                    gifHandler.postDelayed(this, 33) // ~30fps
-                }
+                if (gifRunning) gifHandler.postDelayed(this, 33) // ~30fps
             }
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
-
-            val settingsPrefs = applicationContext.getSharedPreferences("aurora_settings_prefs", MODE_PRIVATE)
-            settingsPrefs.registerOnSharedPreferenceChangeListener(this)
-
-            val filter = IntentFilter().apply {
-                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
-                addAction(Intent.ACTION_BATTERY_CHANGED)
-            }
-            applicationContext.registerReceiver(batteryReceiver, filter)
-
-            checkPowerSaveState()
+            settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
+            mediaPrefs.registerOnSharedPreferenceChangeListener(mediaListener)
         }
 
         override fun onDestroy() {
             super.onDestroy()
-            try {
-                applicationContext.unregisterReceiver(batteryReceiver)
-            } catch (_: Exception) {}
-
-            val settingsPrefs = applicationContext.getSharedPreferences("aurora_settings_prefs", MODE_PRIVATE)
-            settingsPrefs.unregisterOnSharedPreferenceChangeListener(this)
-
+            unregisterPowerReceiver()
+            settingsPrefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
+            mediaPrefs.unregisterOnSharedPreferenceChangeListener(mediaListener)
             releasePlayer()
         }
 
@@ -111,6 +120,12 @@ class AuroraWallpaperService : WallpaperService() {
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
             isVisible = visible
+            if (visible) {
+                registerPowerReceiver()
+                refreshPowerState()
+            } else {
+                unregisterPowerReceiver()
+            }
             updatePlaybackState()
         }
 
@@ -120,42 +135,67 @@ class AuroraWallpaperService : WallpaperService() {
             releasePlayer()
         }
 
-        override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-            currentHolder?.let { holder ->
-                applyResolutionCap(holder)
+        // Receivers only exist while the wallpaper is visible, so there are no wakeups in the background
+        private fun registerPowerReceiver() {
+            if (receiverRegistered) return
+            val filter = IntentFilter().apply {
+                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                addAction(Intent.ACTION_BATTERY_CHANGED)
             }
-            player?.let { p ->
-                val rememberAudio = SettingsPrefs.rememberAudioChoice(applicationContext)
-                p.volume = if (rememberAudio) 1f else 0f
-                val loop = SettingsPrefs.loopAutomatically(applicationContext)
-                p.repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
-            }
-            checkPowerSaveState()
-            updatePlaybackState()
+            ContextCompat.registerReceiver(
+                applicationContext, powerReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            receiverRegistered = true
         }
 
-        private fun checkPowerSaveState() {
+        private fun unregisterPowerReceiver() {
+            if (!receiverRegistered) return
+            try {
+                applicationContext.unregisterReceiver(powerReceiver)
+            } catch (_: Exception) {
+            }
+            receiverRegistered = false
+        }
+
+        // Re-read current power state, including the sticky battery intent
+        private fun refreshPowerState() {
             val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
             isPowerSave = pm?.isPowerSaveMode == true
+            val sticky = applicationContext.registerReceiver(
+                null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+            if (sticky != null) updateBatteryLow(sticky) else isBatteryLow = false
         }
 
-        private fun checkBatteryLevel(intent: Intent) {
+        private fun updateBatteryLow(intent: Intent) {
             val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    status == BatteryManager.BATTERY_STATUS_FULL
             if (level >= 0 && scale > 0) {
                 val pct = (level * 100) / scale
                 val threshold = SettingsPrefs.batteryThreshold(applicationContext)
                 val pauseBelow = SettingsPrefs.pauseBelowThreshold(applicationContext)
-                isBatteryLow = pauseBelow && (pct <= threshold)
+                // never pause just because the battery is low while it is charging
+                isBatteryLow = pauseBelow && !charging && pct <= threshold
             } else {
                 isBatteryLow = false
             }
         }
 
+        private fun updatePlayerSettings() {
+            player?.let { p ->
+                val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
+                p.volume = if (playSound) 1f else 0f
+                val loop = SettingsPrefs.loopAutomatically(applicationContext)
+                p.repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
+            }
+        }
+
         private fun shouldPause(): Boolean {
             if (!isVisible) return true
-            val pauseOnSaver = SettingsPrefs.pauseOnBatterySaver(applicationContext)
-            if (pauseOnSaver && isPowerSave) return true
+            if (SettingsPrefs.pauseOnBatterySaver(applicationContext) && isPowerSave) return true
             if (isBatteryLow) return true
             return false
         }
@@ -174,6 +214,8 @@ class AuroraWallpaperService : WallpaperService() {
             }
         }
 
+        // Honest scope: this shrinks the render surface (less GPU compositing work).
+        // It does not reduce decoding cost of the video file itself.
         private fun applyResolutionCap(holder: SurfaceHolder) {
             val mode = SettingsPrefs.resolutionMode(applicationContext)
             val windowManager = applicationContext.getSystemService(WINDOW_SERVICE) as? WindowManager
@@ -183,73 +225,65 @@ class AuroraWallpaperService : WallpaperService() {
 
             val screenW = if (metrics.widthPixels > 0) metrics.widthPixels else 1080
             val screenH = if (metrics.heightPixels > 0) metrics.heightPixels else 2400
+            val maxScreenDim = maxOf(screenW, screenH).toFloat()
 
-            when (mode) {
-                "1080p" -> {
-                    val maxDim = 1920
-                    val scale = minOf(1f, maxDim.toFloat() / maxOf(screenW, screenH))
-                    val targetW = (screenW * scale).toInt()
-                    val targetH = (screenH * scale).toInt()
-                    holder.setFixedSize(targetW, targetH)
-                }
-                "1440p" -> {
-                    val maxDim = 2560
-                    val scale = minOf(1f, maxDim.toFloat() / maxOf(screenW, screenH))
-                    val targetW = (screenW * scale).toInt()
-                    val targetH = (screenH * scale).toInt()
-                    holder.setFixedSize(targetW, targetH)
-                }
-                else -> {
-                    holder.setSizeFromLayout()
-                }
+            val maxDim = when (mode) {
+                "1080p" -> 1920f
+                "1440p" -> 2560f
+                else -> 0f
+            }
+
+            if (maxDim > 0f) {
+                val scale = minOf(1f, maxDim / maxScreenDim)
+                holder.setFixedSize((screenW * scale).toInt(), (screenH * scale).toInt())
+            } else {
+                holder.setSizeFromLayout()
             }
         }
 
         private fun loadWallpaper(holder: SurfaceHolder) {
             releasePlayer()
 
-            val prefs = applicationContext.getSharedPreferences("aurora_prefs", MODE_PRIVATE)
-            val savedPath = prefs.getString("media_path", null)
-            val mediaType = prefs.getString("media_type", "video")
+            val savedPath = mediaPrefs.getString("media_path", null)
+            val mediaType = mediaPrefs.getString("media_type", "video")
 
-            if (savedPath == null || !File(savedPath).exists()) {
-                return
-            }
+            if (savedPath == null || !File(savedPath).exists()) return
 
             if (mediaType == "gif") {
-                startGif(savedPath, holder)
+                startGif(savedPath)
             } else {
                 startVideo(Uri.fromFile(File(savedPath)), holder)
             }
         }
 
         private fun startVideo(uri: Uri, holder: SurfaceHolder) {
-            val rememberAudio = SettingsPrefs.rememberAudioChoice(applicationContext)
+            val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
             val loop = SettingsPrefs.loopAutomatically(applicationContext)
 
             player = ExoPlayer.Builder(applicationContext).build().apply {
                 setVideoSurface(holder.surface)
                 setMediaItem(MediaItem.fromUri(uri))
                 repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
-                volume = if (rememberAudio) 1f else 0f
+                volume = if (playSound) 1f else 0f
                 videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                 prepare()
             }
-            if (!shouldPause()) {
-                player?.play()
-            }
+
+            refreshPowerState()
+            if (!shouldPause()) player?.play()
         }
 
-        private fun startGif(path: String, holder: SurfaceHolder) {
+        private fun startGif(path: String) {
             try {
-                gifMovie = Movie.decodeStream(FileInputStream(path))
+                gifMovie = FileInputStream(path).use { Movie.decodeStream(it) }
                 gifStartTime = 0
+                refreshPowerState()
                 if (!shouldPause()) {
                     gifRunning = true
                     gifHandler.post(gifDrawRunnable)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("Aurora", "Failed to decode GIF stream", e)
             }
         }
 
@@ -276,17 +310,15 @@ class AuroraWallpaperService : WallpaperService() {
                         canvas.height.toFloat() / movie.height()
                     )
                     canvas.save()
-                    val scaledWidth = movie.width() * scale
-                    val scaledHeight = movie.height() * scale
-                    val dx = (canvas.width - scaledWidth) / 2f
-                    val dy = (canvas.height - scaledHeight) / 2f
+                    val dx = (canvas.width - movie.width() * scale) / 2f
+                    val dy = (canvas.height - movie.height() * scale) / 2f
                     canvas.translate(dx, dy)
                     canvas.scale(scale, scale)
                     movie.draw(canvas, 0f, 0f)
                     canvas.restore()
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("Aurora", "Failed to draw GIF frame", e)
             } finally {
                 canvas?.let { holder.unlockCanvasAndPost(it) }
             }
