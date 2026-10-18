@@ -31,6 +31,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.niranjan.auroralivepaper.ui.components.AuroraGradientButton
+import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import java.io.File
 
 @UnstableApi
@@ -63,7 +64,7 @@ fun PreviewScreen(
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
                             useController = false
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                             player = ExoPlayer.Builder(context).build().apply {
                                 setMediaItem(MediaItem.fromUri(Uri.fromFile(File(mediaPath))))
                                 repeatMode = ExoPlayer.REPEAT_MODE_ALL
@@ -77,24 +78,16 @@ fun PreviewScreen(
                 )
             }
             "image", "gif" -> {
-                if (mediaType == "image" && loadedBitmap != null) {
+                val bmp = loadedBitmap ?: remember(mediaPath) {
+                    if (mediaPath != null) BitmapFactory.decodeFile(mediaPath) else null
+                }
+                bmp?.let {
                     Image(
-                        bitmap = loadedBitmap.asImageBitmap(),
+                        bitmap = it.asImageBitmap(),
                         contentDescription = "Preview",
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Fit
                     )
-                } else if (mediaPath != null) {
-                    // Fallback image / GIF display
-                    val bmp = remember(mediaPath) { BitmapFactory.decodeFile(mediaPath) }
-                    bmp?.let {
-                        Image(
-                            bitmap = it.asImageBitmap(),
-                            contentDescription = "Preview",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
                 }
             }
         }
@@ -105,7 +98,7 @@ fun PreviewScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .background(Color(0xFF0F1422).copy(alpha = 0.92f))
+                .background(Color(0xFF0D121F).copy(alpha = 0.95f))
                 .padding(24.dp)
                 .navigationBarsPadding()
         ) {
@@ -113,17 +106,19 @@ fun PreviewScreen(
                 Text(
                     text = if (mediaType == "image") "Set Image Wallpaper" else "Set Live Wallpaper",
                     color = Color.White,
+                    fontFamily = ManropeFamily,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Preview how it looks on your device.",
-                    color = Color.White.copy(alpha = 0.55f),
+                    text = "Full resolution preview",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontFamily = ManropeFamily,
                     fontSize = 12.sp
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 if (mediaType == "video" || mediaType == "gif") {
                     AuroraGradientButton(
@@ -133,44 +128,53 @@ fun PreviewScreen(
                 } else {
                     Button(
                         onClick = onSetHome,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D1B4E)),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF00B894),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Set as Home Screen", fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Filled.Home, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Set as Home Screen", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Button(
                         onClick = onSetLock,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F4E4A)),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF6C5CE7),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Set as Lock Screen", fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Filled.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Set as Lock Screen", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Button(
                         onClick = onSetBoth,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B2A68)),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF0984E3),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Icon(Icons.Filled.Wallpaper, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Set as Both", fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Filled.Wallpaper, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Set as Both", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 TextButton(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                    Text("Cancel", color = Color.White.copy(alpha = 0.75f), fontFamily = ManropeFamily, fontSize = 14.sp)
                 }
             }
         }

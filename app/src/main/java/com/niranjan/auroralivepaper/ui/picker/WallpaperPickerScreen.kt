@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Movie
 import android.media.MediaMetadataRetriever
@@ -833,6 +834,19 @@ private fun UrlUploadDialog(
         containerColor = Color(0xFF141A29),
         shape = RoundedCornerShape(20.dp)
     )
+}
+
+fun applyImageWallpaper(context: Context, imagePath: String, flags: Int): Boolean {
+    return try {
+        val bitmap = BitmapFactory.decodeFile(imagePath)
+        if (bitmap != null) {
+            WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, flags)
+            true
+        } else false
+    } catch (e: Exception) {
+        Log.w("Aurora", "Failed to apply image wallpaper", e)
+        false
+    }
 }
 
 fun getRecentWallpapers(context: Context): List<RecentWallpaper> {

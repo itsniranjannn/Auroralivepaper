@@ -1,5 +1,6 @@
 package com.niranjan.auroralivepaper
 
+import android.app.WallpaperManager
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -23,6 +24,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.niranjan.auroralivepaper.ui.picker.WallpaperPickerScreen
+import com.niranjan.auroralivepaper.ui.picker.applyImageWallpaper
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromGif
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromVideo
 import com.niranjan.auroralivepaper.ui.picker.cleanupStagingFiles
@@ -148,27 +150,40 @@ class MainActivity : ComponentActivity() {
                             onSetHome = {
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
-                                    saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                    if (type == "image") {
+                                        applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM)
+                                    } else {
+                                        saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                        launchLiveWallpaperPicker(this@MainActivity)
+                                    }
                                 }
-                                launchLiveWallpaperPicker(this@MainActivity)
                                 navController.popBackStack()
                             },
                             onSetLock = {
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
-                                    if (type == "gif") applyLockScreenFromGif(this@MainActivity, activePath)
-                                    else applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
+                                    if (type == "image") {
+                                        applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK)
+                                    } else if (type == "gif") {
+                                        applyLockScreenFromGif(this@MainActivity, activePath)
+                                    } else {
+                                        applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
+                                    }
                                 }
                                 navController.popBackStack()
                             },
                             onSetBoth = {
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
-                                    saveWallpaperMediaPath(this@MainActivity, activePath, type)
-                                    if (type == "gif") applyLockScreenFromGif(this@MainActivity, activePath)
-                                    else applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
+                                    if (type == "image") {
+                                        applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                                    } else {
+                                        saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                        if (type == "gif") applyLockScreenFromGif(this@MainActivity, activePath)
+                                        else applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
+                                        launchLiveWallpaperPicker(this@MainActivity)
+                                    }
                                 }
-                                launchLiveWallpaperPicker(this@MainActivity)
                                 navController.popBackStack()
                             },
                             onDismiss = {
