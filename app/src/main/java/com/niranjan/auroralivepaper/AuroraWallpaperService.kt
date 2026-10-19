@@ -191,7 +191,8 @@ class AuroraWallpaperService : WallpaperService() {
         private fun updatePlayerSettings() {
             player?.let { p ->
                 val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
-                p.volume = if (playSound) 1f else 0f
+                val vol = SettingsPrefs.wallpaperVolume(applicationContext)
+                p.volume = if (playSound) vol else 0f
                 val loop = SettingsPrefs.loopAutomatically(applicationContext)
                 p.repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
             }
@@ -306,13 +307,14 @@ class AuroraWallpaperService : WallpaperService() {
 
         private fun startVideo(uri: Uri, holder: SurfaceHolder) {
             val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
+            val vol = SettingsPrefs.wallpaperVolume(applicationContext)
             val loop = SettingsPrefs.loopAutomatically(applicationContext)
 
             player = ExoPlayer.Builder(applicationContext).build().apply {
                 setVideoSurface(holder.surface)
                 setMediaItem(MediaItem.fromUri(uri))
                 repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
-                volume = if (playSound) 1f else 0f
+                volume = if (playSound) vol else 0f
                 videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                 prepare()
             }

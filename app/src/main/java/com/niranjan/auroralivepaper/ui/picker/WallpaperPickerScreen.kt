@@ -410,7 +410,7 @@ fun WallpaperPickerScreen(
                             )
                             PremiumMediaCard(
                                 label = "URL Upload",
-                                subtitle = "HTTPS · Max 100MB",
+                                subtitle = "Reels · Shorts · Direct",
                                 icon = Icons.Filled.CloudDownload,
                                 accent = Color(0xFF93B5FF),
                                 modifier = Modifier.weight(1f),
@@ -439,6 +439,10 @@ fun WallpaperPickerScreen(
                             var tempFile: File? = null
                             try {
                                 var currentUrlStr = url
+                                if (!currentUrlStr.startsWith("https://", ignoreCase = true) && !currentUrlStr.startsWith("http://", ignoreCase = true)) {
+                                    currentUrlStr = "https://$currentUrlStr"
+                                }
+
                                 if (!currentUrlStr.startsWith("https://", ignoreCase = true)) {
                                     withContext(Dispatchers.Main) {
                                         onError("Security error: URL must start with https://")
@@ -448,7 +452,7 @@ fun WallpaperPickerScreen(
 
                                 var redirects = 0
                                 var connection: HttpURLConnection
-                                val contentType: String
+                                var contentType = ""
 
                                 while (true) {
                                     withContext(Dispatchers.Main) {
@@ -460,6 +464,7 @@ fun WallpaperPickerScreen(
                                     connection.connectTimeout = 10000
                                     connection.readTimeout = 15000
                                     connection.requestMethod = "GET"
+                                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
                                     connection.connect()
 
                                     val code = connection.responseCode
@@ -468,7 +473,7 @@ fun WallpaperPickerScreen(
                                         code == 307 || code == 308
                                     ) {
                                         redirects++
-                                        if (redirects > 3) {
+                                        if (redirects > 5) {
                                             withContext(Dispatchers.Main) {
                                                 onError("Error: Too many redirects.")
                                             }
@@ -503,6 +508,19 @@ fun WallpaperPickerScreen(
                                 var totalBytesRead = 0L
                                 val buffer = ByteArray(8192)
 
+                                // If HTML page (e.g. Instagram Reels or YouTube page), attempt to extract direct media src
+                                if (contentType.contains("text/html", ignoreCase = true)) {
+                                    val htmlContent = connection.inputStream.bufferedReader().use { it.readText() }
+                                    val extractedUrl = extractVideoSrcFromHtml(htmlContent)
+                                    if (extractedUrl != null && extractedUrl.startsWith("https://", ignoreCase = true)) {
+                                        currentUrlStr = extractedUrl
+                                        connection = URL(currentUrlStr).openConnection() as HttpURLConnection
+                                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                                        connection.connect()
+                                        contentType = connection.contentType ?: ""
+                                    }
+                                }
+
                                 connection.inputStream.use { input ->
                                     FileOutputStream(tempFile).use { output ->
                                         var bytesRead: Int
@@ -516,7 +534,6 @@ fun WallpaperPickerScreen(
                                     }
                                 }
 
-                                // Inspect file content for media type (extension or magic bytes)
                                 val detectedType = detectMediaType(tempFile, contentType, currentUrlStr)
                                 if (detectedType == null) {
                                     tempFile.delete()
@@ -546,6 +563,22 @@ fun WallpaperPickerScreen(
             }
         }
     }
+}
+
+private fun extractVideoSrcFromHtml(html: String): String? {
+    // Check open graph video tags <meta property="og:video" content="..."> or og:video:secure_url
+    val ogVideoRegex = Regex("""<meta[^>]+property=["']og:video(:secure_url)?["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+    ogVideoRegex.find(html)?.groupValues?.get(2)?.let { return it }
+
+    // Check twitter player stream <meta name="twitter:player:stream" content="...">
+    val twitterStreamRegex = Regex("""<meta[^>]+name=["']twitter:player:stream["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+    twitterStreamRegex.find(html)?.groupValues?.get(1)?.let { return it }
+
+    // Check direct video src <video[^>]+src=["']([^"']+)["']
+    val videoSrcRegex = Regex("""<video[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+    videoSrcRegex.find(html)?.groupValues?.get(1)?.let { return it }
+
+    return null
 }
 
 private fun detectMediaType(file: File, contentType: String, urlStr: String): String? {
@@ -784,12 +817,12 @@ private fun UrlUploadDialog(
         },
         text = {
             Column {
-                Text("Enter direct link to video, GIF, or image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
+                Text("Enter link to Instagram Reel, YouTube Shorts, or direct video/image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = inputUrl,
                     onValueChange = { inputUrl = it },
-                    placeholder = { Text("https://example.com/media.mp4", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
+                    placeholder = { Text("https://instagram.com/reel/...", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF93B5FF),

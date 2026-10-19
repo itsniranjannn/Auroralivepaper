@@ -40,9 +40,9 @@ private val PinkEdge = Color(0xFF7A3E6E)
 private object Motion {
     const val BgIn = 400
     const val LogoIn = 800
-    const val TitleIn = 300
-    const val SubtitleIn = 300
-    const val ExitFade = 600
+    const val TitleIn = 400
+    const val SubtitleIn = 400
+    const val ExitFade = 500
 }
 
 @Composable
@@ -55,27 +55,27 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
 
     val screenAlpha = remember { Animatable(1f) }
     val contentScale = remember { Animatable(1f) }
-    val titleOffsetY = remember { Animatable(0f) }
+    val titleOffsetY = remember { Animatable(20f) }
 
     val infinite = rememberInfiniteTransition(label = "flow")
     val blobDrift by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(20000, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Reverse),
         label = "blobDrift"
     )
     val loaderProgress by infinite.animateFloat(
         initialValue = 0f, targetValue = 3f,
-        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart),
+        animationSpec = infiniteRepeatable(tween(1400, easing = LinearEasing), RepeatMode.Restart),
         label = "loaderProgress"
     )
     val titleShift by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing), RepeatMode.Reverse),
         label = "titleShift"
     )
     val twinkle by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse),
         label = "twinkle"
     )
 
@@ -85,7 +85,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
         label = "bgAlpha"
     )
 
-    val logoScale = remember { Animatable(0.3f) }
+    val logoScale = remember { Animatable(0.2f) }
     val logoDraw by animateFloatAsState(
         targetValue = if (logoVisible) 1f else 0f,
         animationSpec = tween(Motion.LogoIn, easing = FastOutSlowInEasing),
@@ -99,19 +99,19 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
         label = "titleAlpha"
     )
     val subtitleAlpha by animateFloatAsState(
-        targetValue = if (subtitleVisible) 0.88f else 0f,
+        targetValue = if (subtitleVisible) 0.9f else 0f,
         animationSpec = tween(Motion.SubtitleIn),
         label = "subtitleAlpha"
     )
 
-    val particles = remember { List(3) { Pair(Random.nextFloat(), Random.nextFloat()) } }
+    val particles = remember { List(4) { Pair(Random.nextFloat(), Random.nextFloat()) } }
 
     val stars = remember {
-        val seed = Random(7)
-        List(9) {
+        val seed = Random(12)
+        List(12) {
             Triple(
                 seed.nextFloat(),
-                seed.nextFloat() * 0.28f,
+                seed.nextFloat() * 0.35f,
                 seed.nextFloat()
             )
         }
@@ -119,27 +119,29 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
 
     val vignetteBrush = remember {
         Brush.radialGradient(
-            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f)),
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
             radius = 1200f
         )
     }
 
     LaunchedEffect(Unit) {
-        delay(200); bgVisible = true
+        delay(150); bgVisible = true
         delay(Motion.BgIn.toLong())
         logoVisible = true
-        logoScale.animateTo(1.12f, animationSpec = spring(dampingRatio = 0.5f, stiffness = 140f))
-        logoGlowOnce.animateTo(1f, animationSpec = tween(500))
-        logoScale.animateTo(1f, animationSpec = spring(dampingRatio = 0.6f, stiffness = 260f))
-        logoGlowOnce.animateTo(0.5f, animationSpec = tween(500))
+        logoScale.animateTo(1.15f, animationSpec = spring(dampingRatio = 0.5f, stiffness = 160f))
+        logoGlowOnce.animateTo(1f, animationSpec = tween(400))
+        logoScale.animateTo(1f, animationSpec = spring(dampingRatio = 0.65f, stiffness = 280f))
+        logoGlowOnce.animateTo(0.6f, animationSpec = tween(400))
 
         delay(Motion.TitleIn.toLong()); titleVisible = true
-        delay(Motion.SubtitleIn.toLong()); subtitleVisible = true
-        delay(300); showLoading = true
-        delay(900)
+        titleOffsetY.animateTo(0f, animationSpec = spring(dampingRatio = 0.7f, stiffness = 220f))
 
-        titleOffsetY.animateTo(-36f, animationSpec = tween(Motion.ExitFade, easing = FastOutSlowInEasing))
-        contentScale.animateTo(0.92f, animationSpec = tween(Motion.ExitFade))
+        delay(Motion.SubtitleIn.toLong()); subtitleVisible = true
+        delay(200); showLoading = true
+        delay(1000)
+
+        titleOffsetY.animateTo(-30f, animationSpec = tween(Motion.ExitFade, easing = FastOutSlowInEasing))
+        contentScale.animateTo(0.94f, animationSpec = tween(Motion.ExitFade))
         screenAlpha.animateTo(0f, animationSpec = tween(Motion.ExitFade))
         onFinished()
     }
@@ -165,19 +167,19 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 }
             }
 
-            drawRibbon(AuroraGreen.copy(alpha = 0.34f), size.width * (0.2f + blobDrift * 0.15f), size.height * 0.18f, size.minDimension * 0.55f, 2.6f, -18f)
-            drawRibbon(DeepPurple.copy(alpha = 0.30f), size.width * (0.1f + blobDrift * 0.12f), size.height * 0.32f, size.minDimension * 0.5f, 2.3f, -22f)
-            drawRibbon(Violet.copy(alpha = 0.26f), size.width * (0.42f + blobDrift * 0.1f), size.height * 0.42f, size.minDimension * 0.45f, 2.5f, 15f)
-            drawRibbon(MidnightBlue.copy(alpha = 0.28f), size.width * (0.6f - blobDrift * 0.12f), size.height * 0.55f, size.minDimension * 0.45f, 2.3f, -10f)
-            drawRibbon(Cyan.copy(alpha = 0.26f), size.width * (0.75f - blobDrift * 0.1f), size.height * 0.68f, size.minDimension * 0.4f, 2.4f, 20f)
-            drawRibbon(AuroraGreen.copy(alpha = 0.24f), size.width * (0.55f - blobDrift * 0.08f), size.height * 0.8f, size.minDimension * 0.5f, 2.6f, 8f)
-            drawRibbon(SoftTeal.copy(alpha = 0.28f), size.width * (0.85f - blobDrift * 0.15f), size.height * 0.88f, size.minDimension * 0.45f, 2.2f, -15f)
-            drawRibbon(PinkEdge.copy(alpha = 0.14f), size.width * (0.3f + blobDrift * 0.1f), size.height * 0.25f, size.minDimension * 0.4f, 2.8f, -25f)
+            drawRibbon(AuroraGreen.copy(alpha = 0.38f), size.width * (0.2f + blobDrift * 0.15f), size.height * 0.18f, size.minDimension * 0.58f, 2.6f, -18f)
+            drawRibbon(DeepPurple.copy(alpha = 0.32f), size.width * (0.1f + blobDrift * 0.12f), size.height * 0.32f, size.minDimension * 0.52f, 2.3f, -22f)
+            drawRibbon(Violet.copy(alpha = 0.28f), size.width * (0.42f + blobDrift * 0.1f), size.height * 0.42f, size.minDimension * 0.48f, 2.5f, 15f)
+            drawRibbon(MidnightBlue.copy(alpha = 0.30f), size.width * (0.6f - blobDrift * 0.12f), size.height * 0.55f, size.minDimension * 0.48f, 2.3f, -10f)
+            drawRibbon(Cyan.copy(alpha = 0.28f), size.width * (0.75f - blobDrift * 0.1f), size.height * 0.68f, size.minDimension * 0.44f, 2.4f, 20f)
+            drawRibbon(AuroraGreen.copy(alpha = 0.26f), size.width * (0.55f - blobDrift * 0.08f), size.height * 0.8f, size.minDimension * 0.52f, 2.6f, 8f)
+            drawRibbon(SoftTeal.copy(alpha = 0.30f), size.width * (0.85f - blobDrift * 0.15f), size.height * 0.88f, size.minDimension * 0.48f, 2.2f, -15f)
+            drawRibbon(PinkEdge.copy(alpha = 0.16f), size.width * (0.3f + blobDrift * 0.1f), size.height * 0.25f, size.minDimension * 0.42f, 2.8f, -25f)
 
             val grainSeed = Random(42)
-            repeat(140) {
+            repeat(160) {
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.02f),
+                    color = Color.White.copy(alpha = 0.025f),
                     radius = 0.8.dp.toPx(),
                     center = Offset(grainSeed.nextFloat() * size.width, grainSeed.nextFloat() * size.height)
                 )
@@ -185,8 +187,8 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
 
             stars.forEach { (sx, sy, phase) ->
                 val localTwinkle = ((twinkle + phase) % 1f)
-                val starAlpha = (sin(localTwinkle * Math.PI).toFloat()).coerceIn(0.1f, 1f) * 0.7f
-                val starSize = (1.2f + 1.3f * starAlpha)
+                val starAlpha = (sin(localTwinkle * Math.PI).toFloat()).coerceIn(0.15f, 1f) * 0.85f
+                val starSize = (1.2f + 1.5f * starAlpha)
                 drawCircle(
                     color = Color.White.copy(alpha = starAlpha),
                     radius = starSize.dp.toPx(),
@@ -195,9 +197,9 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
             }
 
             particles.forEach { (px, py) ->
-                val driftY = (py + blobDrift * 0.05f) % 1f
+                val driftY = (py + blobDrift * 0.06f) % 1f
                 drawCircle(
-                    color = Color.White.copy(alpha = 0.05f),
+                    color = Color.White.copy(alpha = 0.08f),
                     radius = 3.dp.toPx(),
                     center = Offset(size.width * px, size.height * driftY)
                 )
@@ -216,35 +218,35 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.scale(logoScale.value)) {
                 Box(
                     modifier = Modifier
-                        .size(160.dp)
-                        .alpha(logoGlowOnce.value * 0.4f)
+                        .size(170.dp)
+                        .alpha(logoGlowOnce.value * 0.5f)
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawCircle(
-                            brush = Brush.radialGradient(colors = listOf(Color(0xFF7CE7D7).copy(alpha = 0.6f), Color.Transparent)),
+                            brush = Brush.radialGradient(colors = listOf(Color(0xFF7CE7D7).copy(alpha = 0.65f), Color(0xFFB38CFF).copy(alpha = 0.3f), Color.Transparent)),
                             radius = size.minDimension / 2f
                         )
                     }
                 }
-                Canvas(modifier = Modifier.size(80.dp)) {
+                Canvas(modifier = Modifier.size(86.dp)) {
                     val w = size.width
                     val h = size.height
                     val path1 = Path().apply {
                         moveTo(w * 0.1f, h * 0.75f)
                         cubicTo(w * 0.35f, h * 0.15f, w * 0.55f, h * 0.85f, w * 0.9f * logoDraw, h * 0.25f)
                     }
-                    drawPath(path1, brush = Brush.linearGradient(listOf(Color(0xFFB38CFF), Color(0xFF7CE7D7), Color.White)), style = Stroke(width = 6.dp.toPx()))
+                    drawPath(path1, brush = Brush.linearGradient(listOf(Color(0xFFB38CFF), Color(0xFF7CE7D7), Color.White)), style = Stroke(width = 6.5.dp.toPx()))
                     val path2 = Path().apply {
                         moveTo(w * 0.15f, h * 0.55f)
                         cubicTo(w * 0.4f, h * 0.05f, w * 0.6f, h * 0.65f, w * 0.95f * logoDraw, h * 0.05f)
                     }
-                    drawPath(path2, brush = Brush.linearGradient(listOf(Color(0xFF7CE7D7), Color.White)), style = Stroke(width = 3.5.dp.toPx()))
+                    drawPath(path2, brush = Brush.linearGradient(listOf(Color(0xFF7CE7D7), Color.White)), style = Stroke(width = 4.dp.toPx()))
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Vibrant High-Luminance "Aurora" Title
+            // Vibrant Animated "Aurora" Title
             Box {
                 val movingAuroraBrush = Brush.linearGradient(
                     colors = listOf(
@@ -253,30 +255,30 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                         Color(0xFF82B1FF),
                         Color(0xFF7CE7D7)
                     ),
-                    start = Offset(titleShift * 300f - 150f, 0f),
-                    end = Offset(titleShift * 300f + 250f, 0f)
+                    start = Offset(titleShift * 350f - 175f, 0f),
+                    end = Offset(titleShift * 350f + 275f, 0f)
                 )
                 Text(
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 44.sp,
+                        fontSize = 46.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.2.sp
+                        letterSpacing = 1.4.sp
                     ),
                     modifier = Modifier
-                        .alpha(titleAlpha * 0.35f)
-                        .offset(x = 1.5.dp, y = 1.5.dp)
+                        .alpha(titleAlpha * 0.4f)
+                        .offset(x = 2.dp, y = 2.dp)
                 )
                 Text(
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 44.sp,
+                        fontSize = 46.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.2.sp
+                        letterSpacing = 1.4.sp
                     ),
                     modifier = Modifier.alpha(titleAlpha)
                 )
@@ -290,13 +292,13 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     fontFamily = ManropeFamily,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp,
+                    letterSpacing = 0.6.sp,
                     textAlign = TextAlign.Center,
                     color = Color.White.copy(alpha = subtitleAlpha)
                 )
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(34.dp))
 
             if (showLoading) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

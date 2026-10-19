@@ -20,6 +20,7 @@ object SettingsPrefs {
     private const val KEY_RICH_MOTION = "rich_motion"
 
     private const val KEY_PLAY_WALLPAPER_SOUND = "play_wallpaper_sound"
+    private const val KEY_WALLPAPER_VOLUME = "wallpaper_volume"
     private const val KEY_RESOLUTION_MODE = "resolution_mode"
     private const val KEY_LOOP_AUTOMATICALLY = "loop_automatically"
 
@@ -72,6 +73,13 @@ object SettingsPrefs {
 
     fun setPlayWallpaperSound(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_PLAY_WALLPAPER_SOUND, value).apply()
+    }
+
+    fun wallpaperVolume(context: Context): Float =
+        prefs(context).getFloat(KEY_WALLPAPER_VOLUME, 0.5f)
+
+    fun setWallpaperVolume(context: Context, value: Float) {
+        prefs(context).edit().putFloat(KEY_WALLPAPER_VOLUME, value.coerceIn(0f, 1f)).apply()
     }
 
     /** One of: "auto", "1080p", "1440p", "original" */
