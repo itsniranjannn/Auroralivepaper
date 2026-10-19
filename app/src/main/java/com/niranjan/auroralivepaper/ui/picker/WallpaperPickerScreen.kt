@@ -74,6 +74,7 @@ import com.niranjan.auroralivepaper.ui.settings.performAuroraHaptic
 import com.niranjan.auroralivepaper.ui.theme.AuroraFrostedBlue
 import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
 import com.niranjan.auroralivepaper.ui.theme.AuroraStormyTeal
+import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -223,8 +224,14 @@ fun WallpaperPickerScreen(
                                     else -> "Good Evening"
                                 }
                             }
-                            Text(greeting, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-                            AuroraGradientText("Aurora", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                greeting,
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontFamily = ManropeFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                            AuroraGradientText("Aurora", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
                         }
 
                         IconButton(
@@ -247,7 +254,14 @@ fun WallpaperPickerScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Text(
+                    "Every unlock, a little more yours.",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 13.sp
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Hero "Now Playing" Card
                 AnimatedVisibility(
@@ -290,6 +304,7 @@ fun WallpaperPickerScreen(
                         Text(
                             "Drop wallpaper file here",
                             color = Color(0xFF7CE7D7),
+                            fontFamily = ManropeFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -306,7 +321,8 @@ fun WallpaperPickerScreen(
                         Column {
                             Text(
                                 "Recent Wallpapers",
-                                color = Color.White.copy(alpha = 0.85f),
+                                color = Color.White.copy(alpha = 0.88f),
+                                fontFamily = ManropeFamily,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 15.sp
                             )
@@ -342,7 +358,8 @@ fun WallpaperPickerScreen(
                 // Upload Grid Section Header
                 Text(
                     "Choose Wallpaper",
-                    color = Color.White.copy(alpha = 0.85f),
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontFamily = ManropeFamily,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp
                 )
@@ -408,28 +425,10 @@ fun WallpaperPickerScreen(
 
                 if (status.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(status, color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                    Text(status, color = Color.White.copy(alpha = 0.85f), fontFamily = ManropeFamily, fontSize = 13.sp)
                 }
 
-                Spacer(modifier = Modifier.height(36.dp))
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Box(
-                        modifier = Modifier.width(100.dp).height(2.dp)
-                            .background(Color.White.copy(alpha = 0.12f))
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        "Built by Niranjan.K",
-                        color = Color.White.copy(alpha = 0.35f),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(30.dp))
             }
 
             if (showUrlDialog) {
@@ -620,7 +619,7 @@ private fun HeroNowPlayingCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Now Playing", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text("Now Playing", color = Color.White.copy(alpha = 0.65f), fontFamily = ManropeFamily, fontSize = 12.sp, fontWeight = FontWeight.Medium)
 
                 if (activePath != null && File(activePath).exists()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -639,7 +638,7 @@ private fun HeroNowPlayingCard(
                                     .background(Color(0xFF7CE7D7).copy(alpha = pulseAlpha))
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Active", color = Color(0xFF7CE7D7), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Active", color = Color(0xFF7CE7D7), fontFamily = ManropeFamily, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))
@@ -662,9 +661,9 @@ private fun HeroNowPlayingCard(
             Spacer(modifier = Modifier.height(14.dp))
 
             if (activePath == null || !File(activePath).exists()) {
-                Text("No live wallpaper active", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                Text("No live wallpaper active", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Choose a video, GIF, or image below to bring your screen to life.", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                Text("Choose a video, GIF, or image below to bring your screen to life.", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 12.sp)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -686,11 +685,12 @@ private fun HeroNowPlayingCard(
                         Text(
                             text = if (activeType == "gif") "Animated GIF Wallpaper" else if (activeType == "image") "Static Image Wallpaper" else "Video Live Wallpaper",
                             color = Color.White,
+                            fontFamily = ManropeFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 12.sp)
                     }
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
                 }
@@ -752,6 +752,7 @@ private fun RecentCard(
             Text(
                 text = recent.type.uppercase(),
                 color = Color.White,
+                fontFamily = ManropeFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )
@@ -759,6 +760,7 @@ private fun RecentCard(
             Text(
                 text = "Re-apply",
                 color = Color(0xFF7CE7D7),
+                fontFamily = ManropeFamily,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -778,16 +780,16 @@ private fun UrlUploadDialog(
     AlertDialog(
         onDismissRequest = { if (!isDownloading) onDismiss() },
         title = {
-            Text("Import from URL", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Import from URL", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
         },
         text = {
             Column {
-                Text("Enter direct link to video, GIF, or image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Text("Enter direct link to video, GIF, or image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = inputUrl,
                     onValueChange = { inputUrl = it },
-                    placeholder = { Text("https://example.com/media.mp4", color = Color.White.copy(alpha = 0.35f)) },
+                    placeholder = { Text("https://example.com/media.mp4", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF93B5FF),
@@ -799,7 +801,7 @@ private fun UrlUploadDialog(
                 )
                 if (dialogStatus.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(dialogStatus, color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds")) Color(0xFFFF7675) else Color(0xFF7CE7D7), fontSize = 12.sp)
+                    Text(dialogStatus, color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds")) Color(0xFFFF7675) else Color(0xFF7CE7D7), fontFamily = ManropeFamily, fontSize = 12.sp)
                 }
             }
         },
@@ -820,7 +822,7 @@ private fun UrlUploadDialog(
                 },
                 enabled = inputUrl.isNotBlank() && !isDownloading
             ) {
-                Text(if (isDownloading) "Downloading..." else "Import")
+                Text(if (isDownloading) "Downloading..." else "Import", fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -828,7 +830,7 @@ private fun UrlUploadDialog(
                 onClick = onDismiss,
                 enabled = !isDownloading
             ) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                Text("Cancel", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily)
             }
         },
         containerColor = Color(0xFF141A29),

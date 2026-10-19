@@ -3,16 +3,13 @@ package com.niranjan.auroralivepaper.ui.splash
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -102,7 +99,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
         label = "titleAlpha"
     )
     val subtitleAlpha by animateFloatAsState(
-        targetValue = if (subtitleVisible) 0.65f else 0f,
+        targetValue = if (subtitleVisible) 0.88f else 0f,
         animationSpec = tween(Motion.SubtitleIn),
         label = "subtitleAlpha"
     )
@@ -224,7 +221,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawCircle(
-                            brush = Brush.radialGradient(colors = listOf(SoftTeal.copy(alpha = 0.6f), Color.Transparent)),
+                            brush = Brush.radialGradient(colors = listOf(Color(0xFF7CE7D7).copy(alpha = 0.6f), Color.Transparent)),
                             radius = size.minDimension / 2f
                         )
                     }
@@ -236,21 +233,26 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                         moveTo(w * 0.1f, h * 0.75f)
                         cubicTo(w * 0.35f, h * 0.15f, w * 0.55f, h * 0.85f, w * 0.9f * logoDraw, h * 0.25f)
                     }
-                    drawPath(path1, brush = Brush.linearGradient(listOf(DeepPurple, SoftTeal, Color.White)), style = Stroke(width = 6.dp.toPx()))
+                    drawPath(path1, brush = Brush.linearGradient(listOf(Color(0xFFB38CFF), Color(0xFF7CE7D7), Color.White)), style = Stroke(width = 6.dp.toPx()))
                     val path2 = Path().apply {
                         moveTo(w * 0.15f, h * 0.55f)
                         cubicTo(w * 0.4f, h * 0.05f, w * 0.6f, h * 0.65f, w * 0.95f * logoDraw, h * 0.05f)
                     }
-                    drawPath(path2, brush = Brush.linearGradient(listOf(SoftTeal.copy(alpha = 0.8f), Color.White)), style = Stroke(width = 3.5.dp.toPx()))
+                    drawPath(path2, brush = Brush.linearGradient(listOf(Color(0xFF7CE7D7), Color.White)), style = Stroke(width = 3.5.dp.toPx()))
                 }
             }
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Aurora title with Manrope font
+            // Vibrant High-Luminance "Aurora" Title
             Box {
                 val movingAuroraBrush = Brush.linearGradient(
-                    colors = listOf(Color(0xFFB38CFF), Color(0xFF7CE7D7), Color(0xFF93B5FF), Color(0xFFB38CFF)),
+                    colors = listOf(
+                        Color(0xFF7CE7D7),
+                        Color(0xFFB38CFF),
+                        Color(0xFF82B1FF),
+                        Color(0xFF7CE7D7)
+                    ),
                     start = Offset(titleShift * 300f - 150f, 0f),
                     end = Offset(titleShift * 300f + 250f, 0f)
                 )
@@ -259,9 +261,9 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 42.sp,
+                        fontSize = 44.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.2.sp
                     ),
                     modifier = Modifier
                         .alpha(titleAlpha * 0.35f)
@@ -272,9 +274,9 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 42.sp,
+                        fontSize = 44.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 1.2.sp
                     ),
                     modifier = Modifier.alpha(titleAlpha)
                 )
@@ -287,8 +289,8 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 style = TextStyle(
                     fontFamily = ManropeFamily,
                     fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.4.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.5.sp,
                     textAlign = TextAlign.Center,
                     color = Color.White.copy(alpha = subtitleAlpha)
                 )
@@ -308,31 +310,11 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                         Box(
                             modifier = Modifier
                                 .size(dotSize)
-                                .background(Color.White.copy(alpha = 0.4f + 0.6f * pulse), CircleShape)
+                                .background(Color(0xFF7CE7D7).copy(alpha = 0.5f + 0.5f * pulse), CircleShape)
                         )
                     }
                 }
             }
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 36.dp)
-                .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.06f))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(50))
-                .padding(horizontal = 14.dp, vertical = 6.dp)
-        ) {
-            Text(
-                text = "Built by Niranjan.K",
-                style = TextStyle(
-                    fontFamily = ManropeFamily,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.45f)
-                )
-            )
         }
     }
 }

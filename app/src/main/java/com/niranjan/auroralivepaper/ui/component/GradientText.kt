@@ -5,15 +5,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
-import com.niranjan.auroralivepaper.ui.theme.AuroraFrostedBlue
-import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 
 @Composable
-fun AuroraGradientText(text: String, fontSize: TextUnit, fontWeight: FontWeight) {
+fun AuroraGradientText(
+    text: String,
+    fontSize: TextUnit,
+    fontWeight: FontWeight = FontWeight.ExtraBold
+) {
     val infinite = rememberInfiniteTransition(label = "textGlow")
     val shift by infinite.animateFloat(
         initialValue = 0f, targetValue = 1f,
@@ -21,7 +24,12 @@ fun AuroraGradientText(text: String, fontSize: TextUnit, fontWeight: FontWeight)
         label = "shift"
     )
     val brush = Brush.horizontalGradient(
-        colors = listOf(AuroraRoyalViolet, AuroraFrostedBlue, AuroraRoyalViolet),
+        colors = listOf(
+            Color(0xFF7CE7D7), // Vibrant Teal
+            Color(0xFFB38CFF), // Soft Lavender
+            Color(0xFF82B1FF), // Electric Periwinkle
+            Color(0xFF7CE7D7)
+        ),
         startX = shift * 200f,
         endX = shift * 200f + 400f
     )
