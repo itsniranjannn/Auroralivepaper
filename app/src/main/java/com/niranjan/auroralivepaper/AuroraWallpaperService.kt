@@ -339,17 +339,24 @@ class AuroraWallpaperService : WallpaperService() {
             val vol = SettingsPrefs.wallpaperVolume(applicationContext)
             val loop = SettingsPrefs.loopAutomatically(applicationContext)
 
+            releasePlayer()
+
             player = ExoPlayer.Builder(applicationContext).build().apply {
-                setVideoSurface(holder.surface)
+                setVideoSurfaceHolder(holder)
                 setMediaItem(MediaItem.fromUri(uri))
                 repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
                 volume = if (playSound) vol else 0f
                 videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+                playWhenReady = true
                 prepare()
             }
 
             refreshPowerState()
-            if (!shouldPause()) player?.play()
+            if (shouldPause()) {
+                player?.pause()
+            } else {
+                player?.play()
+            }
         }
 
         private fun startGif(path: String) {
