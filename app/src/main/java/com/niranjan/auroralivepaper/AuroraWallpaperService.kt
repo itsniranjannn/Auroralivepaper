@@ -7,7 +7,11 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Movie
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Handler
@@ -247,12 +251,56 @@ class AuroraWallpaperService : WallpaperService() {
             val savedPath = mediaPrefs.getString("media_path", null)
             val mediaType = mediaPrefs.getString("media_type", "video")
 
-            if (savedPath == null || !File(savedPath).exists()) return
+            if (savedPath == null || !File(savedPath).exists()) {
+                drawAuroraFallbackTheme(holder)
+                return
+            }
 
             if (mediaType == "gif") {
                 startGif(savedPath)
             } else {
                 startVideo(Uri.fromFile(File(savedPath)), holder)
+            }
+        }
+
+        private fun drawAuroraFallbackTheme(holder: SurfaceHolder) {
+            var canvas: Canvas? = null
+            try {
+                canvas = holder.lockCanvas()
+                if (canvas != null) {
+                    val w = canvas.width.toFloat()
+                    val h = canvas.height.toFloat()
+
+                    // Background: Near Black
+                    canvas.drawColor(Color.parseColor("#07090F"))
+
+                    // Aurora Wave Gradient Paint
+                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        style = Paint.Style.STROKE
+                        strokeWidth = 14f
+                        strokeCap = Paint.Cap.ROUND
+                        shader = LinearGradient(
+                            0f, 0f, w, h,
+                            intArrayOf(
+                                Color.parseColor("#4ECCA3"),
+                                Color.parseColor("#7CE7D7"),
+                                Color.parseColor("#B38CFF")
+                            ),
+                            null,
+                            Shader.TileMode.CLAMP
+                        )
+                    }
+
+                    val path = Path().apply {
+                        moveTo(w * 0.15f, h * 0.65f)
+                        cubicTo(w * 0.35f, h * 0.35f, w * 0.65f, h * 0.75f, w * 0.85f, h * 0.45f)
+                    }
+                    canvas.drawPath(path, paint)
+                }
+            } catch (e: Exception) {
+                Log.w("Aurora", "Failed to draw fallback theme canvas", e)
+            } finally {
+                canvas?.let { holder.unlockCanvasAndPost(it) }
             }
         }
 
