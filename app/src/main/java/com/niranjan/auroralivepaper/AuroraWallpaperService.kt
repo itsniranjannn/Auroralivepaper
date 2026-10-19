@@ -11,7 +11,6 @@ import android.graphics.LinearGradient
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.RectF
 import android.graphics.Shader
 import android.net.Uri
 import android.os.BatteryManager
@@ -220,30 +219,11 @@ class AuroraWallpaperService : WallpaperService() {
             }
         }
 
-        // Honest scope: this shrinks the render surface (less GPU compositing work).
-        // It does not reduce decoding cost of the video file itself.
         private fun applyResolutionCap(holder: SurfaceHolder) {
-            val mode = SettingsPrefs.resolutionMode(applicationContext)
-            val windowManager = applicationContext.getSystemService(WINDOW_SERVICE) as? WindowManager
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            windowManager?.defaultDisplay?.getRealMetrics(metrics)
-
-            val screenW = if (metrics.widthPixels > 0) metrics.widthPixels else 1080
-            val screenH = if (metrics.heightPixels > 0) metrics.heightPixels else 2400
-            val maxScreenDim = maxOf(screenW, screenH).toFloat()
-
-            val maxDim = when (mode) {
-                "1080p" -> 1920f
-                "1440p" -> 2560f
-                else -> 0f
-            }
-
-            if (maxDim > 0f) {
-                val scale = minOf(1f, maxDim / maxScreenDim)
-                holder.setFixedSize((screenW * scale).toInt(), (screenH * scale).toInt())
-            } else {
+            try {
                 holder.setSizeFromLayout()
+            } catch (e: Exception) {
+                Log.w("Aurora", "Error configuring surface size", e)
             }
         }
 
