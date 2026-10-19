@@ -11,6 +11,7 @@ import android.graphics.LinearGradient
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Shader
 import android.net.Uri
 import android.os.BatteryManager
@@ -272,13 +273,25 @@ class AuroraWallpaperService : WallpaperService() {
                     val w = canvas.width.toFloat()
                     val h = canvas.height.toFloat()
 
-                    // Background: Near Black
-                    canvas.drawColor(Color.parseColor("#07090F"))
+                    // Background: Dark Cosmic Gradient
+                    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        shader = LinearGradient(
+                            0f, 0f, 0f, h,
+                            intArrayOf(
+                                Color.parseColor("#07090F"),
+                                Color.parseColor("#121829"),
+                                Color.parseColor("#07090F")
+                            ),
+                            null,
+                            Shader.TileMode.CLAMP
+                        )
+                    }
+                    canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-                    // Aurora Wave Gradient Paint
-                    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    // Aurora Wave 1
+                    val wavePaint1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         style = Paint.Style.STROKE
-                        strokeWidth = 14f
+                        strokeWidth = 16f
                         strokeCap = Paint.Cap.ROUND
                         shader = LinearGradient(
                             0f, 0f, w, h,
@@ -291,12 +304,48 @@ class AuroraWallpaperService : WallpaperService() {
                             Shader.TileMode.CLAMP
                         )
                     }
-
-                    val path = Path().apply {
-                        moveTo(w * 0.15f, h * 0.65f)
-                        cubicTo(w * 0.35f, h * 0.35f, w * 0.65f, h * 0.75f, w * 0.85f, h * 0.45f)
+                    val path1 = Path().apply {
+                        moveTo(w * 0.1f, h * 0.65f)
+                        cubicTo(w * 0.35f, h * 0.35f, w * 0.65f, h * 0.75f, w * 0.9f, h * 0.45f)
                     }
-                    canvas.drawPath(path, paint)
+                    canvas.drawPath(path1, wavePaint1)
+
+                    // Aurora Wave 2
+                    val wavePaint2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        style = Paint.Style.STROKE
+                        strokeWidth = 10f
+                        strokeCap = Paint.Cap.ROUND
+                        shader = LinearGradient(
+                            0f, 0f, w, h,
+                            intArrayOf(
+                                Color.parseColor("#B38CFF"),
+                                Color.parseColor("#7CE7D7")
+                            ),
+                            null,
+                            Shader.TileMode.CLAMP
+                        )
+                    }
+                    val path2 = Path().apply {
+                        moveTo(w * 0.15f, h * 0.72f)
+                        cubicTo(w * 0.4f, h * 0.42f, w * 0.7f, h * 0.82f, w * 0.95f, h * 0.52f)
+                    }
+                    canvas.drawPath(path2, wavePaint2)
+
+                    // Centered Glass Badge Text
+                    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.WHITE
+                        textSize = 48f
+                        textAlign = Paint.Align.CENTER
+                        isFakeBoldText = true
+                    }
+                    val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = Color.parseColor("#B3C0D6")
+                        textSize = 28f
+                        textAlign = Paint.Align.CENTER
+                    }
+
+                    canvas.drawText("Aurora Live Paper", w / 2f, h * 0.85f, textPaint)
+                    canvas.drawText("Bring your screen to life", w / 2f, h * 0.85f + 40f, subTextPaint)
                 }
             } catch (e: Exception) {
                 Log.w("Aurora", "Failed to draw fallback theme canvas", e)

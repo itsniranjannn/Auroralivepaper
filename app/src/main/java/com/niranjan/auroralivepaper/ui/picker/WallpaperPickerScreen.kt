@@ -18,31 +18,23 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Gif
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -57,7 +49,6 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +58,6 @@ import androidx.media3.common.util.UnstableApi
 import com.niranjan.auroralivepaper.AuroraWallpaperService
 import com.niranjan.auroralivepaper.data.SettingsPrefs
 import com.niranjan.auroralivepaper.ui.components.AuroraAnimatedBackground
-import com.niranjan.auroralivepaper.ui.components.AuroraGradientButton
 import com.niranjan.auroralivepaper.ui.components.AuroraGradientText
 import com.niranjan.auroralivepaper.ui.components.PremiumMediaCard
 import com.niranjan.auroralivepaper.ui.settings.performAuroraHaptic
@@ -199,185 +189,192 @@ fun WallpaperPickerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
                 horizontalAlignment = Alignment.Start
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Header Row
-                AnimatedVisibility(
-                    visible = showHeader,
-                    enter = fadeIn(tween(350)) + slideInVertically(initialOffsetY = { -20 }, animationSpec = tween(350))
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            val greeting = remember {
-                                val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                                when {
-                                    hour < 12 -> "Good Morning"
-                                    hour < 18 -> "Good Afternoon"
-                                    else -> "Good Evening"
-                                }
-                            }
-                            Text(
-                                greeting,
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontFamily = ManropeFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
-                            )
-                            AuroraGradientText("Aurora", fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
-                        }
-
-                        IconButton(
-                            onClick = {
-                                performAuroraHaptic(context, haptic)
-                                onOpenSettings()
-                            },
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "Settings",
-                                tint = Color.White.copy(alpha = 0.9f)
-                            )
-                        }
-                    }
-                }
-
-                Text(
-                    "Every unlock, a little more yours.",
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontFamily = ManropeFamily,
-                    fontSize = 13.sp
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Hero "Now Playing" Card
-                AnimatedVisibility(
-                    visible = showHero,
-                    enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400))
-                ) {
-                    HeroNowPlayingCard(
-                        activePath = activePath,
-                        activeType = activeType ?: "video",
-                        onClick = {
-                            val path = activePath
-                            if (path != null && File(path).exists()) {
-                                performAuroraHaptic(context, haptic)
-                                onPreview(path, activeType ?: "video")
-                            }
-                        },
-                        onClear = {
-                            performAuroraHaptic(context, haptic)
-                            activePath?.let { File(it).delete() }
-                            prefs.edit().remove("media_path").remove("media_type").putLong("media_version", System.currentTimeMillis()).apply()
-                            activePath = null
-                            status = "Wallpaper cleared"
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(22.dp))
-
-                // Drag and drop dropzone banner
-                if (isDragHovered) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(90.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
-                            .border(2.dp, Color(0xFF7CE7D7), RoundedCornerShape(20.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Drop wallpaper file here",
-                            color = Color(0xFF7CE7D7),
-                            fontFamily = ManropeFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(18.dp))
-                }
-
-                // Recent Wallpapers Row (if any exist)
-                if (recentsList.isNotEmpty()) {
+                Column {
+                    // Header Row
                     AnimatedVisibility(
-                        visible = showRecents,
+                        visible = showHeader,
+                        enter = fadeIn(tween(350)) + slideInVertically(initialOffsetY = { -20 }, animationSpec = tween(350))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                val greeting = remember {
+                                    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                                    when {
+                                        hour < 12 -> "Good Morning"
+                                        hour < 18 -> "Good Afternoon"
+                                        else -> "Good Evening"
+                                    }
+                                }
+                                Text(
+                                    greeting,
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    fontFamily = ManropeFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                AuroraGradientText("Aurora", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    performAuroraHaptic(context, haptic)
+                                    onOpenSettings()
+                                },
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color.White.copy(alpha = 0.08f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Settings,
+                                    contentDescription = "Settings",
+                                    tint = Color.White.copy(alpha = 0.9f)
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        "Every unlock, a little more yours.",
+                        color = Color.White.copy(alpha = 0.65f),
+                        fontFamily = ManropeFamily,
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Hero "Now Playing" Card
+                    AnimatedVisibility(
+                        visible = showHero,
                         enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400))
                     ) {
-                        Column {
+                        HeroNowPlayingCard(
+                            activePath = activePath,
+                            activeType = activeType ?: "video",
+                            onClick = {
+                                val path = activePath
+                                if (path != null && File(path).exists()) {
+                                    performAuroraHaptic(context, haptic)
+                                    onPreview(path, activeType ?: "video")
+                                }
+                            },
+                            onClear = {
+                                performAuroraHaptic(context, haptic)
+                                activePath?.let { File(it).delete() }
+                                prefs.edit().remove("media_path").remove("media_type").putLong("media_version", System.currentTimeMillis()).apply()
+                                activePath = null
+                                status = "Wallpaper cleared"
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Drag and drop dropzone banner
+                    if (isDragHovered) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(70.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
+                                .border(2.dp, Color(0xFF7CE7D7), RoundedCornerShape(18.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                "Recent Wallpapers",
-                                color = Color.White.copy(alpha = 0.88f),
+                                "Drop wallpaper file here",
+                                color = Color(0xFF7CE7D7),
                                 fontFamily = ManropeFamily,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 fontSize = 15.sp
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                recentsList.forEach { recent ->
-                                    RecentCard(
-                                        recent = recent,
-                                        onClick = {
-                                            performAuroraHaptic(context, haptic)
-                                            if (File(recent.path).exists()) {
-                                                onPreview(recent.path, recent.type)
-                                            } else {
-                                                status = "Media file no longer available"
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // Recent Wallpapers Row (if any exist)
+                    if (recentsList.isNotEmpty()) {
+                        AnimatedVisibility(
+                            visible = showRecents,
+                            enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400))
+                        ) {
+                            Column {
+                                Text(
+                                    "Recent Wallpapers",
+                                    color = Color.White.copy(alpha = 0.88f),
+                                    fontFamily = ManropeFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    recentsList.forEach { recent ->
+                                        RecentCard(
+                                            recent = recent,
+                                            onClick = {
+                                                performAuroraHaptic(context, haptic)
+                                                if (File(recent.path).exists()) {
+                                                    onPreview(recent.path, recent.type)
+                                                } else {
+                                                    status = "Media file no longer available"
+                                                }
+                                            },
+                                            onDelete = {
+                                                performAuroraHaptic(context, haptic)
+                                                removeRecentWallpaper(context, recent.path)
+                                                recentsList = getRecentWallpapers(context)
                                             }
-                                        },
-                                        onDelete = {
-                                            performAuroraHaptic(context, haptic)
-                                            removeRecentWallpaper(context, recent.path)
-                                            recentsList = getRecentWallpapers(context)
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(14.dp))
                             }
-                            Spacer(modifier = Modifier.height(22.dp))
                         }
                     }
+
+                    // Upload Grid Section Header
+                    Text(
+                        "Choose Wallpaper",
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontFamily = ManropeFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // Upload Grid Section Header
-                Text(
-                    "Choose Wallpaper",
-                    color = Color.White.copy(alpha = 0.88f),
-                    fontFamily = ManropeFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // 2x2 Grid with Spring Motion
+                // 2x2 Grid with Weight
                 AnimatedVisibility(
                     visible = showGrid,
-                    enter = fadeIn(tween(450)) + slideInVertically(initialOffsetY = { 35 }, animationSpec = tween(450))
+                    enter = fadeIn(tween(450)) + slideInVertically(initialOffsetY = { 35 }, animationSpec = tween(450)),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxHeight()
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
                             PremiumMediaCard(
                                 label = "Video",
                                 subtitle = "MP4 · MOV · WEBM",
                                 icon = Icons.Filled.MovieFilter,
                                 accent = AuroraRoyalViolet,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     pickVideoLauncher.launch(arrayOf("video/*"))
@@ -388,7 +385,7 @@ fun WallpaperPickerScreen(
                                 subtitle = "Animated GIF",
                                 icon = Icons.Filled.Gif,
                                 accent = AuroraStormyTeal,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     pickGifLauncher.launch(arrayOf("image/gif"))
@@ -396,13 +393,16 @@ fun WallpaperPickerScreen(
                             )
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
                             PremiumMediaCard(
                                 label = "Image",
                                 subtitle = "JPG · PNG · WEBP",
                                 icon = Icons.Filled.Add,
                                 accent = AuroraFrostedBlue,
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     pickImageLauncher.launch(arrayOf("image/*"))
@@ -410,10 +410,10 @@ fun WallpaperPickerScreen(
                             )
                             PremiumMediaCard(
                                 label = "URL Upload",
-                                subtitle = "Reels · Shorts · Direct",
+                                subtitle = "Reels · Direct Link",
                                 icon = Icons.Filled.CloudDownload,
                                 accent = Color(0xFF93B5FF),
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     showUrlDialog = true
@@ -424,11 +424,9 @@ fun WallpaperPickerScreen(
                 }
 
                 if (status.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(status, color = Color.White.copy(alpha = 0.85f), fontFamily = ManropeFamily, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(status, color = Color.White.copy(alpha = 0.85f), fontFamily = ManropeFamily, fontSize = 12.sp)
                 }
-
-                Spacer(modifier = Modifier.height(30.dp))
             }
 
             if (showUrlDialog) {
@@ -438,16 +436,17 @@ fun WallpaperPickerScreen(
                         scope.launch(Dispatchers.IO) {
                             var tempFile: File? = null
                             try {
-                                var currentUrlStr = url
+                                var currentUrlStr = url.trim()
                                 if (!currentUrlStr.startsWith("https://", ignoreCase = true) && !currentUrlStr.startsWith("http://", ignoreCase = true)) {
                                     currentUrlStr = "https://$currentUrlStr"
                                 }
 
-                                if (!currentUrlStr.startsWith("https://", ignoreCase = true)) {
-                                    withContext(Dispatchers.Main) {
-                                        onError("Security error: URL must start with https://")
+                                // Check if Instagram Reel/Post link
+                                if (currentUrlStr.contains("instagram.com/", ignoreCase = true)) {
+                                    val reelCode = extractInstagramCode(currentUrlStr)
+                                    if (reelCode != null) {
+                                        currentUrlStr = "https://www.instagram.com/p/$reelCode/embed/captioned/"
                                     }
-                                    return@launch
                                 }
 
                                 var redirects = 0
@@ -461,10 +460,12 @@ fun WallpaperPickerScreen(
 
                                     connection = URL(currentUrlStr).openConnection() as HttpURLConnection
                                     connection.instanceFollowRedirects = false
-                                    connection.connectTimeout = 10000
+                                    connection.connectTimeout = 12000
                                     connection.readTimeout = 15000
                                     connection.requestMethod = "GET"
-                                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                                    connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,video/*;q=0.8")
+                                    connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
                                     connection.connect()
 
                                     val code = connection.responseCode
@@ -480,13 +481,7 @@ fun WallpaperPickerScreen(
                                             return@launch
                                         }
                                         val loc = connection.getHeaderField("Location") ?: ""
-                                        if (!loc.startsWith("https://", ignoreCase = true)) {
-                                            withContext(Dispatchers.Main) {
-                                                onError("Security error: Redirect target must use HTTPS.")
-                                            }
-                                            return@launch
-                                        }
-                                        currentUrlStr = loc
+                                        currentUrlStr = if (loc.startsWith("/")) "https://www.instagram.com$loc" else loc
                                     } else if (code == HttpURLConnection.HTTP_OK) {
                                         contentType = connection.contentType ?: ""
                                         break
@@ -505,21 +500,21 @@ fun WallpaperPickerScreen(
                                     onProgress("Downloading...")
                                 }
 
-                                var totalBytesRead = 0L
-                                val buffer = ByteArray(8192)
-
-                                // If HTML page (e.g. Instagram Reels or YouTube page), attempt to extract direct media src
+                                // If HTML embed page (e.g. Instagram Reels or Twitter embed), parse video src
                                 if (contentType.contains("text/html", ignoreCase = true)) {
                                     val htmlContent = connection.inputStream.bufferedReader().use { it.readText() }
                                     val extractedUrl = extractVideoSrcFromHtml(htmlContent)
                                     if (extractedUrl != null && extractedUrl.startsWith("https://", ignoreCase = true)) {
                                         currentUrlStr = extractedUrl
                                         connection = URL(currentUrlStr).openConnection() as HttpURLConnection
-                                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                                         connection.connect()
                                         contentType = connection.contentType ?: ""
                                     }
                                 }
+
+                                var totalBytesRead = 0L
+                                val buffer = ByteArray(8192)
 
                                 connection.inputStream.use { input ->
                                     FileOutputStream(tempFile).use { output ->
@@ -565,18 +560,23 @@ fun WallpaperPickerScreen(
     }
 }
 
+private fun extractInstagramCode(url: String): String? {
+    val regex = Regex("""instagram\.com/(?:reel|p)/([A-Za-z0-9_-]+)""")
+    return regex.find(url)?.groupValues?.get(1)
+}
+
 private fun extractVideoSrcFromHtml(html: String): String? {
     // Check open graph video tags <meta property="og:video" content="..."> or og:video:secure_url
     val ogVideoRegex = Regex("""<meta[^>]+property=["']og:video(:secure_url)?["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    ogVideoRegex.find(html)?.groupValues?.get(2)?.let { return it }
+    ogVideoRegex.find(html)?.groupValues?.get(2)?.let { return it.replace("&amp;", "&") }
 
     // Check twitter player stream <meta name="twitter:player:stream" content="...">
     val twitterStreamRegex = Regex("""<meta[^>]+name=["']twitter:player:stream["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    twitterStreamRegex.find(html)?.groupValues?.get(1)?.let { return it }
+    twitterStreamRegex.find(html)?.groupValues?.get(1)?.let { return it.replace("&amp;", "&") }
 
     // Check direct video src <video[^>]+src=["']([^"']+)["']
     val videoSrcRegex = Regex("""<video[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    videoSrcRegex.find(html)?.groupValues?.get(1)?.let { return it }
+    videoSrcRegex.find(html)?.groupValues?.get(1)?.let { return it.replace("&amp;", "&") }
 
     return null
 }
@@ -632,7 +632,7 @@ private fun HeroNowPlayingCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(22.dp))
             .background(
                 Brush.linearGradient(
                     colors = listOf(
@@ -642,9 +642,9 @@ private fun HeroNowPlayingCard(
                     )
                 )
             )
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
             .clickable(enabled = activePath != null && File(activePath).exists(), onClick = onClick)
-            .padding(20.dp)
+            .padding(16.dp)
     ) {
         Column {
             Row(
@@ -662,7 +662,7 @@ private fun HeroNowPlayingCard(
                                 .clip(RoundedCornerShape(50))
                                 .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
                                 .border(1.dp, Color(0xFF7CE7D7).copy(alpha = 0.4f), RoundedCornerShape(50))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -670,39 +670,39 @@ private fun HeroNowPlayingCard(
                                     .clip(CircleShape)
                                     .background(Color(0xFF7CE7D7).copy(alpha = pulseAlpha))
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Active", color = Color(0xFF7CE7D7), fontFamily = ManropeFamily, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         IconButton(
                             onClick = onClear,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.DeleteOutline,
                                 contentDescription = "Remove Wallpaper",
                                 tint = Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             if (activePath == null || !File(activePath).exists()) {
-                Text("No live wallpaper active", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("Choose a video, GIF, or image below to bring your screen to life.", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 12.sp)
+                Text("No live wallpaper active", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("Choose a video, GIF, or image below to bring your screen to life.", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 11.sp)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Color.White.copy(alpha = 0.08f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -711,19 +711,19 @@ private fun HeroNowPlayingCard(
                             "image" -> Icons.Filled.Add
                             else -> Icons.Filled.Videocam
                         }
-                        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(24.dp))
+                        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(20.dp))
                     }
-                    Spacer(modifier = Modifier.width(14.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (activeType == "gif") "Animated GIF Wallpaper" else if (activeType == "image") "Static Image Wallpaper" else "Video Live Wallpaper",
                             color = Color.White,
                             fontFamily = ManropeFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            fontSize = 15.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 12.sp)
+                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 11.sp)
                     }
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
                 }
@@ -740,12 +740,12 @@ private fun RecentCard(
 ) {
     Box(
         modifier = Modifier
-            .width(115.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .width(105.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(18.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(12.dp)
+            .padding(10.dp)
     ) {
         Column(horizontalAlignment = Alignment.Start) {
             Row(
@@ -755,8 +755,8 @@ private fun RecentCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(10.dp))
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Color.White.copy(alpha = 0.08f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -765,36 +765,36 @@ private fun RecentCard(
                         "image" -> Icons.Filled.Add
                         else -> Icons.Filled.MovieFilter
                     }
-                    Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(18.dp))
+                    Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
                 }
 
                 IconButton(
                     onClick = onDelete,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
                         contentDescription = "Remove recent",
                         tint = Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = recent.type.uppercase(),
                 color = Color.White,
                 fontFamily = ManropeFamily,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp
+                fontSize = 11.sp
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "Re-apply",
                 color = Color(0xFF7CE7D7),
                 fontFamily = ManropeFamily,
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -817,7 +817,7 @@ private fun UrlUploadDialog(
         },
         text = {
             Column {
-                Text("Enter link to Instagram Reel, YouTube Shorts, or direct video/image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
+                Text("Enter link to Instagram Reel, or direct video/image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = inputUrl,

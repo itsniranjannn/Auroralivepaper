@@ -3,13 +3,16 @@ package com.niranjan.auroralivepaper.ui.splash
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -99,7 +102,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
         label = "titleAlpha"
     )
     val subtitleAlpha by animateFloatAsState(
-        targetValue = if (subtitleVisible) 0.9f else 0f,
+        targetValue = if (subtitleVisible) 1f else 0f,
         animationSpec = tween(Motion.SubtitleIn),
         label = "subtitleAlpha"
     )
@@ -244,61 +247,86 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
-            // Vibrant Animated "Aurora" Title
-            Box {
+            // 3D Shimmering "Aurora" Title with Radial Aura
+            Box(contentAlignment = Alignment.Center) {
+                // Background radial glow behind text
+                Canvas(modifier = Modifier.size(200.dp, 60.dp).alpha(titleAlpha * 0.6f)) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(Color(0xFF7CE7D7).copy(alpha = 0.45f), Color.Transparent)
+                        ),
+                        radius = size.width / 2f
+                    )
+                }
+
                 val movingAuroraBrush = Brush.linearGradient(
                     colors = listOf(
+                        Color(0xFF00F2FE),
                         Color(0xFF7CE7D7),
                         Color(0xFFB38CFF),
                         Color(0xFF82B1FF),
-                        Color(0xFF7CE7D7)
+                        Color(0xFF00F2FE)
                     ),
                     start = Offset(titleShift * 350f - 175f, 0f),
                     end = Offset(titleShift * 350f + 275f, 0f)
                 )
+
+                // Soft shadow layer
                 Text(
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 46.sp,
+                        fontSize = 48.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.4.sp
+                        letterSpacing = 1.6.sp
                     ),
                     modifier = Modifier
-                        .alpha(titleAlpha * 0.4f)
+                        .alpha(titleAlpha * 0.35f)
                         .offset(x = 2.dp, y = 2.dp)
                 )
+
+                // Sharp foreground layer
                 Text(
                     text = "Aurora",
                     style = TextStyle(
                         brush = movingAuroraBrush,
                         fontFamily = ManropeFamily,
-                        fontSize = 46.sp,
+                        fontSize = 48.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.4.sp
+                        letterSpacing = 1.6.sp
                     ),
                     modifier = Modifier.alpha(titleAlpha)
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            Text(
-                text = "Bring your screen to life.",
-                style = TextStyle(
-                    fontFamily = ManropeFamily,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.6.sp,
-                    textAlign = TextAlign.Center,
-                    color = Color.White.copy(alpha = subtitleAlpha)
+            // Glass Pill Badge for Subtitle
+            Box(
+                modifier = Modifier
+                    .alpha(subtitleAlpha)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.08f))
+                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+                    .padding(horizontal = 18.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Bring your screen to life.",
+                    style = TextStyle(
+                        fontFamily = ManropeFamily,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 0.8.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color.White.copy(alpha = 0.95f)
+                    )
                 )
-            )
+            }
 
-            Spacer(modifier = Modifier.height(34.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             if (showLoading) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -312,7 +340,7 @@ fun AuroraIntroScreen(onFinished: () -> Unit) {
                         Box(
                             modifier = Modifier
                                 .size(dotSize)
-                                .background(Color(0xFF7CE7D7).copy(alpha = 0.5f + 0.5f * pulse), CircleShape)
+                                .background(Color(0xFF7CE7D7).copy(alpha = 0.6f + 0.4f * pulse), CircleShape)
                         )
                     }
                 }
