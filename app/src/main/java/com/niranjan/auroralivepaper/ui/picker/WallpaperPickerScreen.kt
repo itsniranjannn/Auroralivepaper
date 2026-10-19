@@ -355,26 +355,25 @@ fun WallpaperPickerScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                // 2x2 Grid with Weight
+                // Compact Proportional 2x2 Grid
                 AnimatedVisibility(
                     visible = showGrid,
-                    enter = fadeIn(tween(450)) + slideInVertically(initialOffsetY = { 35 }, animationSpec = tween(450)),
-                    modifier = Modifier.weight(1f)
+                    enter = fadeIn(tween(450)) + slideInVertically(initialOffsetY = { 35 }, animationSpec = tween(450))
                 ) {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxHeight()
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             PremiumMediaCard(
                                 label = "Video",
                                 subtitle = "MP4 · MOV · WEBM",
                                 icon = Icons.Filled.MovieFilter,
                                 accent = AuroraRoyalViolet,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                modifier = Modifier.weight(1f),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     pickVideoLauncher.launch(arrayOf("video/*"))
@@ -385,7 +384,7 @@ fun WallpaperPickerScreen(
                                 subtitle = "Animated GIF",
                                 icon = Icons.Filled.Gif,
                                 accent = AuroraStormyTeal,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                modifier = Modifier.weight(1f),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     pickGifLauncher.launch(arrayOf("image/gif"))
@@ -395,14 +394,14 @@ fun WallpaperPickerScreen(
 
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             PremiumMediaCard(
                                 label = "Image",
                                 subtitle = "JPG · PNG · WEBP",
                                 icon = Icons.Filled.Add,
                                 accent = AuroraFrostedBlue,
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                modifier = Modifier.weight(1f),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     pickImageLauncher.launch(arrayOf("image/*"))
@@ -413,7 +412,7 @@ fun WallpaperPickerScreen(
                                 subtitle = "Reels · Direct Link",
                                 icon = Icons.Filled.CloudDownload,
                                 accent = Color(0xFF93B5FF),
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                modifier = Modifier.weight(1f),
                                 onClick = {
                                     performAuroraHaptic(context, haptic)
                                     showUrlDialog = true
@@ -432,86 +431,58 @@ fun WallpaperPickerScreen(
             if (showUrlDialog) {
                 UrlUploadDialog(
                     onDismiss = { showUrlDialog = false },
-                    onImport = { url, onError, onProgress ->
+                    onImport = { urlInput, onError, onProgress ->
                         scope.launch(Dispatchers.IO) {
                             var tempFile: File? = null
                             try {
-                                var currentUrlStr = url.trim()
-                                if (!currentUrlStr.startsWith("https://", ignoreCase = true) && !currentUrlStr.startsWith("http://", ignoreCase = true)) {
-                                    currentUrlStr = "https://$currentUrlStr"
-                                }
+                                val rawInput = urlInput.trim()
+                                var currentUrlStr = if (!rawInput.startsWith("http://", ignoreCase = true) && !rawInput.startsWith("https://", ignoreCase = true)) {
+                                    "https://$rawInput"
+                                } else rawInput
 
-                                // Check if Instagram Reel/Post link
+                                // Direct Instagram Media Endpoint
                                 if (currentUrlStr.contains("instagram.com/", ignoreCase = true)) {
-                                    val reelCode = extractInstagramCode(currentUrlStr)
-                                    if (reelCode != null) {
-                                        currentUrlStr = "https://www.instagram.com/p/$reelCode/embed/captioned/"
+                                    onProgress("Resolving Instagram post...")
+                                    val code = extractInstagramCode(currentUrlStr)
+                                    if (code != null) {
+                                        currentUrlStr = "https://www.instagram.com/p/$code/media/?size=l"
                                     }
                                 }
-
-                                var redirects = 0
-                                var connection: HttpURLConnection
-                                var contentType = ""
-
-                                while (true) {
-                                    withContext(Dispatchers.Main) {
-                                        onProgress("Connecting...")
-                                    }
-
-                                    connection = URL(currentUrlStr).openConnection() as HttpURLConnection
-                                    connection.instanceFollowRedirects = false
-                                    connection.connectTimeout = 12000
-                                    connection.readTimeout = 15000
-                                    connection.requestMethod = "GET"
-                                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-                                    connection.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,video/*;q=0.8")
-                                    connection.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
-                                    connection.connect()
-
-                                    val code = connection.responseCode
-                                    if (code == HttpURLConnection.HTTP_MOVED_PERM ||
-                                        code == HttpURLConnection.HTTP_MOVED_TEMP ||
-                                        code == 307 || code == 308
-                                    ) {
-                                        redirects++
-                                        if (redirects > 5) {
-                                            withContext(Dispatchers.Main) {
-                                                onError("Error: Too many redirects.")
-                                            }
-                                            return@launch
-                                        }
-                                        val loc = connection.getHeaderField("Location") ?: ""
-                                        currentUrlStr = if (loc.startsWith("/")) "https://www.instagram.com$loc" else loc
-                                    } else if (code == HttpURLConnection.HTTP_OK) {
-                                        contentType = connection.contentType ?: ""
-                                        break
-                                    } else {
-                                        withContext(Dispatchers.Main) {
-                                            onError("HTTP error $code")
-                                        }
-                                        return@launch
-                                    }
-                                }
-
-                                val maxAllowedBytes = 100L * 1024L * 1024L // 100 MB
-                                tempFile = File(context.filesDir, "download_temp_${System.currentTimeMillis()}.tmp")
 
                                 withContext(Dispatchers.Main) {
                                     onProgress("Downloading...")
                                 }
 
-                                // If HTML embed page (e.g. Instagram Reels or Twitter embed), parse video src
-                                if (contentType.contains("text/html", ignoreCase = true)) {
-                                    val htmlContent = connection.inputStream.bufferedReader().use { it.readText() }
-                                    val extractedUrl = extractVideoSrcFromHtml(htmlContent)
-                                    if (extractedUrl != null && extractedUrl.startsWith("https://", ignoreCase = true)) {
-                                        currentUrlStr = extractedUrl
+                                var connection = URL(currentUrlStr).openConnection() as HttpURLConnection
+                                connection.instanceFollowRedirects = true
+                                connection.connectTimeout = 12000
+                                connection.readTimeout = 15000
+                                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                                connection.setRequestProperty("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,video/*;q=0.8,*/*;q=0.5")
+                                connection.connect()
+
+                                var responseCode = connection.responseCode
+                                if (responseCode in 300..399) {
+                                    val loc = connection.getHeaderField("Location")
+                                    if (!loc.isNullOrBlank()) {
+                                        currentUrlStr = loc
                                         connection = URL(currentUrlStr).openConnection() as HttpURLConnection
                                         connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                                         connection.connect()
-                                        contentType = connection.contentType ?: ""
+                                        responseCode = connection.responseCode
                                     }
                                 }
+
+                                if (responseCode != HttpURLConnection.HTTP_OK) {
+                                    withContext(Dispatchers.Main) {
+                                        onError("HTTP error $responseCode")
+                                    }
+                                    return@launch
+                                }
+
+                                val contentType = connection.contentType ?: ""
+                                val maxAllowedBytes = 100L * 1024L * 1024L // 100 MB
+                                tempFile = File(context.filesDir, "download_temp_${System.currentTimeMillis()}.tmp")
 
                                 var totalBytesRead = 0L
                                 val buffer = ByteArray(8192)
@@ -565,22 +536,6 @@ private fun extractInstagramCode(url: String): String? {
     return regex.find(url)?.groupValues?.get(1)
 }
 
-private fun extractVideoSrcFromHtml(html: String): String? {
-    // Check open graph video tags <meta property="og:video" content="..."> or og:video:secure_url
-    val ogVideoRegex = Regex("""<meta[^>]+property=["']og:video(:secure_url)?["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    ogVideoRegex.find(html)?.groupValues?.get(2)?.let { return it.replace("&amp;", "&") }
-
-    // Check twitter player stream <meta name="twitter:player:stream" content="...">
-    val twitterStreamRegex = Regex("""<meta[^>]+name=["']twitter:player:stream["'][^>]+content=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    twitterStreamRegex.find(html)?.groupValues?.get(1)?.let { return it.replace("&amp;", "&") }
-
-    // Check direct video src <video[^>]+src=["']([^"']+)["']
-    val videoSrcRegex = Regex("""<video[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    videoSrcRegex.find(html)?.groupValues?.get(1)?.let { return it.replace("&amp;", "&") }
-
-    return null
-}
-
 private fun detectMediaType(file: File, contentType: String, urlStr: String): String? {
     if (contentType.contains("gif", ignoreCase = true) || urlStr.endsWith(".gif", ignoreCase = true)) return "gif"
     if (contentType.contains("video", ignoreCase = true) || urlStr.endsWith(".mp4", ignoreCase = true) || urlStr.endsWith(".webm", ignoreCase = true) || urlStr.endsWith(".mov", ignoreCase = true)) return "video"
@@ -606,8 +561,8 @@ private fun detectMediaType(file: File, contentType: String, urlStr: String): St
         } catch (_: Exception) {}
     }
 
-    // Default fallback to video if length > 0
-    return if (file.length() > 0) "video" else null
+    // Default fallback to image if length > 0 and failed
+    return if (file.length() > 0) "image" else null
 }
 
 @Composable
@@ -817,12 +772,12 @@ private fun UrlUploadDialog(
         },
         text = {
             Column {
-                Text("Enter link to Instagram Reel, or direct video/image (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
+                Text("Enter direct link or Instagram post/reel URL (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = inputUrl,
                     onValueChange = { inputUrl = it },
-                    placeholder = { Text("https://instagram.com/reel/...", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
+                    placeholder = { Text("https://instagram.com/p/...", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF93B5FF),

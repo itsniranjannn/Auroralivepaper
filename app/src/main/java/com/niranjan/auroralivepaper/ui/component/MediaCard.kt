@@ -4,13 +4,11 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MovieFilter
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -24,7 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.clickable
+import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 
 @Composable
 fun PremiumMediaCard(
@@ -46,30 +44,44 @@ fun PremiumMediaCard(
     Box(
         modifier = modifier
             .scale(scale)
-            .clip(RoundedCornerShape(22.dp))
+            .height(98.dp)
+            .clip(RoundedCornerShape(20.dp))
             .background(
                 Brush.verticalGradient(
                     listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.06f))
                 )
             )
-            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(18.dp)
+            .padding(12.dp)
     ) {
-        Column {
+        Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(accent.copy(alpha = 0.25f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(28.dp))
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
             }
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(subtitle, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+
+            Column {
+                Text(
+                    text = label,
+                    color = Color.White,
+                    fontFamily = ManropeFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+                Spacer(modifier = Modifier.height(1.dp))
+                Text(
+                    text = subtitle,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 10.sp
+                )
+            }
         }
     }
 }
