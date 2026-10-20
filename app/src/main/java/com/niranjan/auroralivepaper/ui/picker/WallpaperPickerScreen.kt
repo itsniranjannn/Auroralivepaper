@@ -68,6 +68,7 @@ import com.niranjan.auroralivepaper.ui.theme.AuroraFrostedBlue
 import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
 import com.niranjan.auroralivepaper.ui.theme.AuroraStormyTeal
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
+import com.niranjan.auroralivepaper.util.WebVideoExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -447,11 +448,19 @@ fun WallpaperPickerScreen(
 
                                 onProgress("Connecting...")
 
-                                // Direct Instagram Media Endpoint
+                                // Check if this is an Instagram link
                                 if (downloadUrl.contains("instagram.com/", ignoreCase = true)) {
-                                    val code = extractInstagramCode(downloadUrl)
-                                    if (code != null) {
-                                        downloadUrl = "https://www.instagram.com/p/$code/media/?size=l"
+                                    withContext(Dispatchers.Main) {
+                                        onProgress("Resolving Instagram video...")
+                                    }
+                                    val resolved = WebVideoExtractor.resolveVideoUrl(context, downloadUrl)
+                                    if (!resolved.isNullOrBlank()) {
+                                        downloadUrl = resolved
+                                    } else {
+                                        withContext(Dispatchers.Main) {
+                                            onError("Could not extract video from this Instagram link. Ensure it is public.")
+                                        }
+                                        return@launch
                                     }
                                 }
 
