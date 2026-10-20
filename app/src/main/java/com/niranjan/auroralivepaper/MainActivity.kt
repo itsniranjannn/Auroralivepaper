@@ -179,8 +179,6 @@ class MainActivity : ComponentActivity() {
                                         applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
                                     } else {
                                         saveWallpaperMediaPath(this@MainActivity, activePath, type)
-                                        if (type == "gif") applyLockScreenFromGif(this@MainActivity, activePath)
-                                        else applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
                                         launchLiveWallpaperPicker(this@MainActivity)
                                     }
                                 }

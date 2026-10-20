@@ -111,6 +111,7 @@ class AuroraWallpaperService : WallpaperService() {
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
+            Log.d("AuroraEngine", "onSurfaceCreated: isValid=${holder.surface.isValid}")
             currentHolder = holder
             applyResolutionCap(holder)
             loadWallpaper(holder)
@@ -118,15 +119,27 @@ class AuroraWallpaperService : WallpaperService() {
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
+            Log.d("AuroraEngine", "onSurfaceChanged: ${width}x${height}")
             currentHolder = holder
+            player?.let { p ->
+                if (holder.surface.isValid) {
+                    p.setVideoSurfaceHolder(holder)
+                }
+            }
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
+            Log.d("AuroraEngine", "onVisibilityChanged: visible=$visible")
             isVisible = visible
             if (visible) {
                 registerPowerReceiver()
                 refreshPowerState()
+                currentHolder?.let { holder ->
+                    if (holder.surface.isValid) {
+                        player?.setVideoSurfaceHolder(holder)
+                    }
+                }
             } else {
                 unregisterPowerReceiver()
             }
@@ -135,21 +148,26 @@ class AuroraWallpaperService : WallpaperService() {
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             super.onSurfaceDestroyed(holder)
+            Log.d("AuroraEngine", "onSurfaceDestroyed")
             currentHolder = null
-            releasePlayer()
+            player?.clearVideoSurfaceHolder(holder)
+            player?.pause()
+            gifRunning = false
+            gifHandler.removeCallbacks(gifDrawRunnable)
         }
 
         // Receivers only exist while the wallpaper is visible, so there are no wakeups in the background
         private fun registerPowerReceiver() {
             if (receiverRegistered) return
-            val filter = IntentFilter().apply {
-                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
-                addAction(Intent.ACTION_BATTERY_CHANGED)
+            try {
+                val filter = IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                ContextCompat.registerReceiver(
+                    applicationContext, powerReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
+                )
+                receiverRegistered = true
+            } catch (e: Exception) {
+                Log.w("AuroraEngine", "Failed to register powerReceiver", e)
             }
-            ContextCompat.registerReceiver(
-                applicationContext, powerReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
-            )
-            receiverRegistered = true
         }
 
         private fun unregisterPowerReceiver() {
@@ -165,10 +183,15 @@ class AuroraWallpaperService : WallpaperService() {
         private fun refreshPowerState() {
             val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
             isPowerSave = pm?.isPowerSaveMode == true
-            val sticky = applicationContext.registerReceiver(
-                null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            )
-            if (sticky != null) updateBatteryLow(sticky) else isBatteryLow = false
+            try {
+                val sticky = applicationContext.registerReceiver(
+                    null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+                )
+                if (sticky != null) updateBatteryLow(sticky) else isBatteryLow = false
+            } catch (e: Exception) {
+                Log.w("AuroraEngine", "Failed to get sticky battery intent", e)
+                isBatteryLow = false
+            }
         }
 
         private fun updateBatteryLow(intent: Intent) {
@@ -194,7 +217,7 @@ class AuroraWallpaperService : WallpaperService() {
                 val vol = SettingsPrefs.wallpaperVolume(applicationContext)
                 p.volume = if (playSound) vol else 0f
                 val loop = SettingsPrefs.loopAutomatically(applicationContext)
-                p.repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
+                p.repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ONE else ExoPlayer.REPEAT_MODE_OFF
             }
         }
 
@@ -206,12 +229,17 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private fun updatePlaybackState() {
-            if (shouldPause()) {
+            val pause = shouldPause()
+            Log.d("AuroraEngine", "updatePlaybackState: shouldPause=$pause (isVisible=$isVisible, isPowerSave=$isPowerSave, isBatteryLow=$isBatteryLow)")
+            if (pause) {
                 player?.pause()
                 gifRunning = false
                 gifHandler.removeCallbacks(gifDrawRunnable)
             } else {
-                player?.play()
+                player?.let { p ->
+                    p.playWhenReady = true
+                    p.play()
+                }
                 if (gifMovie != null && !gifRunning) {
                     gifRunning = true
                     gifHandler.post(gifDrawRunnable)
@@ -228,17 +256,18 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private fun loadWallpaper(holder: SurfaceHolder) {
-            releasePlayer()
-
             val savedPath = mediaPrefs.getString("media_path", null)
             val mediaType = mediaPrefs.getString("media_type", "video")
+            Log.d("AuroraEngine", "loadWallpaper: path=$savedPath, type=$mediaType")
 
             if (savedPath == null || !File(savedPath).exists()) {
+                releasePlayer()
                 drawAuroraFallbackTheme(holder)
                 return
             }
 
             if (mediaType == "gif") {
+                releasePlayer()
                 startGif(savedPath)
             } else {
                 startVideo(Uri.fromFile(File(savedPath)), holder)
@@ -344,7 +373,7 @@ class AuroraWallpaperService : WallpaperService() {
             player = ExoPlayer.Builder(applicationContext).build().apply {
                 setVideoSurfaceHolder(holder)
                 setMediaItem(MediaItem.fromUri(uri))
-                repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ALL else ExoPlayer.REPEAT_MODE_OFF
+                repeatMode = if (loop) ExoPlayer.REPEAT_MODE_ONE else ExoPlayer.REPEAT_MODE_OFF
                 volume = if (playSound) vol else 0f
                 videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                 playWhenReady = true
@@ -352,11 +381,7 @@ class AuroraWallpaperService : WallpaperService() {
             }
 
             refreshPowerState()
-            if (shouldPause()) {
-                player?.pause()
-            } else {
-                player?.play()
-            }
+            updatePlaybackState()
         }
 
         private fun startGif(path: String) {

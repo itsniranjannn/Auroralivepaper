@@ -889,14 +889,28 @@ fun addRecentWallpaper(context: Context, path: String, type: String) {
 
 @UnstableApi
 fun launchLiveWallpaperPicker(context: Context) {
-    val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
-    intent.putExtra(
-        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-        ComponentName(context, AuroraWallpaperService::class.java)
-    )
-    context.startActivity(intent)
-    if (context is Activity) {
-        context.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+    try {
+        val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+            putExtra(
+                WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                ComponentName(context, AuroraWallpaperService::class.java)
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+        if (context is Activity) {
+            context.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+        }
+    } catch (e: Exception) {
+        Log.w("AuroraPicker", "ACTION_CHANGE_LIVE_WALLPAPER failed, trying fallback intent", e)
+        try {
+            val fallback = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(fallback)
+        } catch (e2: Exception) {
+            Toast.makeText(context, "Could not open Live Wallpaper picker", Toast.LENGTH_SHORT).show()
+        }
     }
 }
 
@@ -919,10 +933,13 @@ fun promoteStagingToActive(context: Context, stagingPath: String, type: String):
         stagingFile.copyTo(activeFile, overwrite = true)
         stagingFile.delete()
     }
+    // Ensure world/service readable
+    activeFile.setReadable(true, false)
 
     // Save to recents (keep top 3 wallpapers up to 150MB cap for 1-tap re-apply)
     val recentFile = File(context.filesDir, "recent_${System.currentTimeMillis()}.$ext")
     activeFile.copyTo(recentFile, overwrite = true)
+    recentFile.setReadable(true, false)
     addRecentWallpaper(context, recentFile.absolutePath, type)
 
     saveWallpaperMediaPath(context, activeFile.absolutePath, type)
