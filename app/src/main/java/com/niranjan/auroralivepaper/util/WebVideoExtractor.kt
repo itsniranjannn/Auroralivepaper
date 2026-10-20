@@ -24,47 +24,49 @@ import kotlin.coroutines.resume
  */
 object WebVideoExtractor {
 
-    private const val TIMEOUT_MS = 15000L
+    private const val TIMEOUT_MS = 25000L
 
     /**
      * Extracts an Instagram shortcode from Reel or Post links.
      */
     fun extractInstagramCode(url: String): String? {
         val regex = Regex("""instagram\.com/(?:reel|reels|p|tv)/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
-        return regex.find(url)?.groupValues?.get(1)
+        val code = regex.find(url)?.groupValues?.get(1)
+        return code?.trimEnd('/')
     }
 
     /**
      * Resolves the direct video MP4 URL from an Instagram or web video link.
-     * Uses lightweight fallback HTTP scraping first, then headless WebView if needed.
+     * Uses headless native WebView extraction on Main thread.
      */
     suspend fun resolveVideoUrl(context: Context, rawUrl: String): String? {
         val instaCode = extractInstagramCode(rawUrl)
         if (instaCode != null) {
-            // First attempt: lightweight HTTP scrape of embed page
-            val embedScraped = withContext(Dispatchers.IO) {
-                tryScrapeInstagramEmbed(instaCode)
+            // Attempt 1: Load Instagram reel directly in real browser environment
+            val reelUrl = "https://www.instagram.com/reel/$instaCode/"
+            val reelResult = withContext(Dispatchers.Main) {
+                extractFromHeadlessWebView(context, reelUrl)
             }
-            if (!embedScraped.isNullOrBlank()) {
-                return embedScraped
-            }
-
-            // Second attempt: headless native WebView extraction on Main thread
-            val targetUrl = "https://www.instagram.com/reel/$instaCode/"
-            val webViewResult = withContext(Dispatchers.Main) {
-                extractFromHeadlessWebView(context, targetUrl)
-            }
-            if (!webViewResult.isNullOrBlank()) {
-                return webViewResult
+            if (!reelResult.isNullOrBlank()) {
+                return reelResult
             }
 
-            // Third attempt: embed URL in headless WebView
+            // Attempt 2: Load Instagram post link
+            val postUrl = "https://www.instagram.com/p/$instaCode/"
+            val postResult = withContext(Dispatchers.Main) {
+                extractFromHeadlessWebView(context, postUrl)
+            }
+            if (!postResult.isNullOrBlank()) {
+                return postResult
+            }
+
+            // Attempt 3: Embed endpoint
             val embedUrl = "https://www.instagram.com/p/$instaCode/embed/captioned/"
-            val embedWebViewResult = withContext(Dispatchers.Main) {
+            val embedResult = withContext(Dispatchers.Main) {
                 extractFromHeadlessWebView(context, embedUrl)
             }
-            if (!embedWebViewResult.isNullOrBlank()) {
-                return embedWebViewResult
+            if (!embedResult.isNullOrBlank()) {
+                return embedResult
             }
         }
 

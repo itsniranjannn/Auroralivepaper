@@ -117,9 +117,11 @@ class AuroraWallpaperService : WallpaperService() {
             Log.d("AuroraEngine", "onSurfaceChanged: ${width}x${height}, isPreview=$isPreview")
             currentHolder = holder
             try {
-                mediaPlayer?.setDisplay(holder)
+                if (holder.surface.isValid) {
+                    mediaPlayer?.setSurface(holder.surface)
+                }
             } catch (e: Exception) {
-                Log.w("AuroraEngine", "Error setting display onSurfaceChanged", e)
+                Log.w("AuroraEngine", "Error setting surface onSurfaceChanged", e)
             }
         }
 
@@ -368,7 +370,7 @@ class AuroraWallpaperService : WallpaperService() {
 
             try {
                 mediaPlayer = MediaPlayer().apply {
-                    setDisplay(holder)
+                    setSurface(holder.surface)
                     setDataSource(filePath)
                     isLooping = loop
                     val actualVol = if (playSound) vol else 0f

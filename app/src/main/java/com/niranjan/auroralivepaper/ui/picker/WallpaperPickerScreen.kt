@@ -897,7 +897,7 @@ fun launchLiveWallpaperPicker(context: Context) {
             wallpaperInfo.serviceName == AuroraWallpaperService::class.java.name
 
     if (isAlreadySet) {
-        Toast.makeText(context, "Wallpaper updated successfully!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Live Wallpaper updated!", Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -934,6 +934,7 @@ fun copyMediaToAppStorage(context: Context, uri: Uri, fileName: String): String 
             input.copyTo(output)
         }
     }
+    outputFile.setReadable(true, false)
     return outputFile.absolutePath
 }
 
@@ -983,15 +984,27 @@ fun applyLockScreenFromVideo(context: Context, videoPath: String, seconds: Float
     return try {
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(videoPath)
-        val micros = (seconds * 1_000_000).toLong()
-        val frame = retriever.getFrameAtTime(micros)
+        val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+        val durationMs = durationStr?.toLongOrNull() ?: 1000L
+        val requestedMs = (seconds * 1000f).toLong()
+        val targetMs = requestedMs.coerceIn(100L, durationMs)
+        val micros = targetMs * 1000L
+        val frame = retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) 
+            ?: retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST)
+            ?: retriever.frameAtTime
         retriever.release()
         if (frame != null) {
+            val softwareBitmap = if (frame.config == Bitmap.Config.HARDWARE) {
+                frame.copy(Bitmap.Config.ARGB_8888, false)
+            } else {
+                frame
+            }
             WallpaperManager.getInstance(context)
-                .setBitmap(frame, null, true, WallpaperManager.FLAG_LOCK)
+                .setBitmap(softwareBitmap, null, true, WallpaperManager.FLAG_LOCK)
             true
         } else false
     } catch (e: Exception) {
+        Log.e("AuroraPicker", "applyLockScreenFromVideo failed", e)
         false
     }
 }
@@ -1000,7 +1013,9 @@ fun applyLockScreenFromGif(context: Context, gifPath: String): Boolean {
     return try {
         val movie = Movie.decodeStream(FileInputStream(gifPath))
         if (movie != null) {
-            val bitmap = Bitmap.createBitmap(movie.width(), movie.height(), Bitmap.Config.ARGB_8888)
+            val w = if (movie.width() > 0) movie.width() else 720
+            val h = if (movie.height() > 0) movie.height() else 1280
+            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             movie.setTime(0)
             movie.draw(canvas, 0f, 0f)
@@ -1009,6 +1024,7 @@ fun applyLockScreenFromGif(context: Context, gifPath: String): Boolean {
             true
         } else false
     } catch (e: Exception) {
+        Log.e("AuroraPicker", "applyLockScreenFromGif failed", e)
         false
     }
 }
