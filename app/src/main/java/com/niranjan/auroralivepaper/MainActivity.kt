@@ -178,6 +178,12 @@ class MainActivity : ComponentActivity() {
                                     if (type == "image") {
                                         applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
                                     } else {
+                                        try {
+                                            // Clearing FLAG_LOCK allows the live wallpaper to show and animate on BOTH home and lock screens seamlessly!
+                                            WallpaperManager.getInstance(this@MainActivity).clear(WallpaperManager.FLAG_LOCK)
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("MainActivity", "Could not clear FLAG_LOCK", e)
+                                        }
                                         saveWallpaperMediaPath(this@MainActivity, activePath, type)
                                         launchLiveWallpaperPicker(this@MainActivity)
                                     }

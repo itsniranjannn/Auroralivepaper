@@ -889,6 +889,18 @@ fun addRecentWallpaper(context: Context, path: String, type: String) {
 
 @UnstableApi
 fun launchLiveWallpaperPicker(context: Context) {
+    // If the live wallpaper is already active as the system wallpaper component, notify user directly!
+    val wm = WallpaperManager.getInstance(context)
+    val wallpaperInfo = try { wm.wallpaperInfo } catch (e: Exception) { null }
+    val isAlreadySet = wallpaperInfo != null &&
+            wallpaperInfo.packageName == context.packageName &&
+            wallpaperInfo.serviceName == AuroraWallpaperService::class.java.name
+
+    if (isAlreadySet) {
+        Toast.makeText(context, "Wallpaper updated successfully!", Toast.LENGTH_SHORT).show()
+        return
+    }
+
     try {
         val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
             putExtra(

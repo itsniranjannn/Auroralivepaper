@@ -44,7 +44,7 @@ fun PremiumMediaCard(
     Box(
         modifier = modifier
             .scale(scale)
-            .height(98.dp)
+            .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(
                 Brush.verticalGradient(
@@ -53,35 +53,33 @@ fun PremiumMediaCard(
             )
             .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .padding(12.dp)
+            .padding(horizontal = 14.dp, vertical = 14.dp)
     ) {
-        Column(verticalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxSize()) {
+        Column {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(accent.copy(alpha = 0.25f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
             }
-
-            Column {
-                Text(
-                    text = label,
-                    color = Color.White,
-                    fontFamily = ManropeFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.height(1.dp))
-                Text(
-                    text = subtitle,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontFamily = ManropeFamily,
-                    fontSize = 10.sp
-                )
-            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = label,
+                color = Color.White,
+                fontFamily = ManropeFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                color = Color.White.copy(alpha = 0.6f),
+                fontFamily = ManropeFamily,
+                fontSize = 11.sp
+            )
         }
     }
 }
