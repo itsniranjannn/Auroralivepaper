@@ -1,5 +1,6 @@
 package com.niranjan.auroralivepaper
 
+import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -89,6 +90,9 @@ class AuroraWallpaperService : WallpaperService() {
                             isPowerSave = pm?.isPowerSaveMode == true
                         }
                         Intent.ACTION_BATTERY_CHANGED -> updateBatteryLow(intent)
+                        Intent.ACTION_USER_PRESENT, Intent.ACTION_SCREEN_ON, Intent.ACTION_SCREEN_OFF -> {
+                            updatePlayerSettings()
+                        }
                     }
                     updatePlaybackState()
                 } catch (e: Exception) {
@@ -199,7 +203,13 @@ class AuroraWallpaperService : WallpaperService() {
         private fun registerPowerReceiver() {
             if (receiverRegistered) return
             try {
-                val filter = IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                val filter = IntentFilter().apply {
+                    addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                    addAction(Intent.ACTION_BATTERY_CHANGED)
+                    addAction(Intent.ACTION_USER_PRESENT)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                }
                 ContextCompat.registerReceiver(
                     applicationContext, powerReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED
                 )
@@ -252,18 +262,26 @@ class AuroraWallpaperService : WallpaperService() {
             }
         }
 
+        private fun isDeviceLocked(): Boolean {
+            val km = applicationContext.getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
+            return km?.isKeyguardLocked == true
+        }
+
         private fun updatePlayerSettings() {
             mediaPlayer?.let { mp ->
                 try {
                     if (isPrepared) {
-                        val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
+                        val isLocked = isDeviceLocked()
+                        val soundEnabled = SettingsPrefs.playWallpaperSound(applicationContext)
+                        // STRICT ENFORCEMENT: Never play sound when device is locked on the Lock Screen!
+                        val canPlaySound = soundEnabled && !isLocked && !isPreview
                         val vol = SettingsPrefs.wallpaperVolume(applicationContext)
-                        val actualVol = if (playSound) vol else 0f
+                        val actualVol = if (canPlaySound) vol else 0f
                         mp.setVolume(actualVol, actualVol)
                         val loop = SettingsPrefs.loopAutomatically(applicationContext)
                         mp.isLooping = loop
 
-                        if (!playSound) {
+                        if (!canPlaySound) {
                             try {
                                 val trackInfo = mp.trackInfo
                                 for (i in trackInfo.indices) {

@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Gif
@@ -61,6 +62,7 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +79,7 @@ import com.niranjan.auroralivepaper.ui.theme.AuroraFrostedBlue
 import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
 import com.niranjan.auroralivepaper.ui.theme.AuroraStormyTeal
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
+import com.niranjan.auroralivepaper.util.InstagramExtractResult
 import com.niranjan.auroralivepaper.util.WebVideoExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -475,21 +478,55 @@ fun WallpaperPickerScreen(
                                     "https://$rawInput"
                                 } else rawInput
 
+                                val lowerUrl = downloadUrl.lowercase()
+                                if (lowerUrl.contains("youtube.com") || lowerUrl.contains("m.youtube.com") || lowerUrl.contains("youtu.be") || lowerUrl.contains("music.youtube.com") || lowerUrl.contains("/shorts/")) {
+                                    withContext(Dispatchers.Main) {
+                                        onError("YouTube links aren't supported. Download the video to your phone and use Video import instead.")
+                                    }
+                                    return@launch
+                                }
+
                                 onProgress("Connecting...")
 
-                                // Check if this is an Instagram link
                                 if (downloadUrl.contains("instagram.com/", ignoreCase = true)) {
                                     withContext(Dispatchers.Main) {
                                         onProgress("Resolving Instagram video...")
                                     }
-                                    val resolved = WebVideoExtractor.resolveVideoUrl(context, downloadUrl)
-                                    if (!resolved.isNullOrBlank()) {
-                                        downloadUrl = resolved
-                                    } else {
-                                        withContext(Dispatchers.Main) {
-                                            onError("Could not extract video from this Instagram link. Ensure it is public.")
+                                    val extractResult = WebVideoExtractor.resolveVideoUrl(context, downloadUrl)
+                                    when (extractResult) {
+                                        is InstagramExtractResult.Success -> {
+                                            downloadUrl = extractResult.url
                                         }
-                                        return@launch
+                                        is InstagramExtractResult.PrivateOrLogin -> {
+                                            withContext(Dispatchers.Main) {
+                                                onError("This post looks private or needs a login.\nTip: save the video to your phone from Instagram, then use Video import.")
+                                            }
+                                            return@launch
+                                        }
+                                        is InstagramExtractResult.Blocked -> {
+                                            withContext(Dispatchers.Main) {
+                                                onError("Instagram blocked the request, try again in a few minutes.\nTip: save the video to your phone from Instagram, then use Video import.")
+                                            }
+                                            return@launch
+                                        }
+                                        is InstagramExtractResult.NotFound -> {
+                                            withContext(Dispatchers.Main) {
+                                                onError("Post not found.\nTip: save the video to your phone from Instagram, then use Video import.")
+                                            }
+                                            return@launch
+                                        }
+                                        is InstagramExtractResult.NetworkError -> {
+                                            withContext(Dispatchers.Main) {
+                                                onError("Network error connecting to Instagram. Check your connection.\nTip: save the video to your phone from Instagram, then use Video import.")
+                                            }
+                                            return@launch
+                                        }
+                                        is InstagramExtractResult.Unknown -> {
+                                            withContext(Dispatchers.Main) {
+                                                onError("Couldn't read this reel. Try again, or save the video from Instagram and use Video import.")
+                                            }
+                                            return@launch
+                                        }
                                     }
                                 }
 
@@ -519,6 +556,15 @@ fun WallpaperPickerScreen(
                                     }
                                 }
 
+                                val contentType = connection.contentType ?: ""
+                                if (contentType.startsWith("text/", ignoreCase = true)) {
+                                    connection.disconnect()
+                                    withContext(Dispatchers.Main) {
+                                        onError("This link is a web page, not a video or image file.")
+                                    }
+                                    return@launch
+                                }
+
                                 if (code != HttpURLConnection.HTTP_OK) {
                                     withContext(Dispatchers.Main) {
                                         onError("HTTP error $code while downloading")
@@ -545,12 +591,43 @@ fun WallpaperPickerScreen(
                                     }
                                 }
 
-                                // Magic bytes inspection to detect actual binary media type
                                 val finalType = detectRealFileType(tempFile)
+                                if (finalType == null) {
+                                    tempFile?.delete()
+                                    withContext(Dispatchers.Main) {
+                                        onError("This link is a web page, not a video or image file.")
+                                    }
+                                    return@launch
+                                }
 
                                 val ext = if (finalType == "gif") "gif" else if (finalType == "video") "mp4" else "jpg"
                                 val stagingFile = File(context.filesDir, "staging_url_wallpaper.$ext")
                                 tempFile.renameTo(stagingFile)
+
+                                if (finalType == "video") {
+                                    val retriever = MediaMetadataRetriever()
+                                    try {
+                                        retriever.setDataSource(stagingFile.absolutePath)
+                                        val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                        val hasVideoStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO)
+                                        val durationMs = durationStr?.toLongOrNull() ?: 0L
+                                        if (durationMs <= 0 || hasVideoStr != "yes") {
+                                            stagingFile.delete()
+                                            withContext(Dispatchers.Main) {
+                                                onError("This file can't be played as a video.")
+                                            }
+                                            return@launch
+                                        }
+                                    } catch (e: Exception) {
+                                        stagingFile.delete()
+                                        withContext(Dispatchers.Main) {
+                                            onError("This file can't be played as a video.")
+                                        }
+                                        return@launch
+                                    } finally {
+                                        try { retriever.release() } catch (_: Exception) {}
+                                    }
+                                }
 
                                 withContext(Dispatchers.Main) {
                                     showUrlDialog = false
@@ -570,23 +647,34 @@ fun WallpaperPickerScreen(
     }
 }
 
-private fun detectRealFileType(file: File): String {
-    if (!file.exists() || file.length() < 12) return "image"
+private fun detectRealFileType(file: File): String? {
+    if (!file.exists() || file.length() < 12) return null
     return try {
-        val bytes = ByteArray(12)
+        val bufferSize = minOf(file.length().toInt(), 1024)
+        val bytes = ByteArray(bufferSize)
         FileInputStream(file).use { it.read(bytes) }
         val headerHex = bytes.joinToString("") { "%02X".format(it) }
+        val headerText = String(bytes, Charsets.UTF_8).lowercase()
 
-        // MP4 / MOV / WEBM video magic bytes
-        if (headerHex.contains("66747970") || headerHex.contains("1A45DFA3") || headerHex.contains("6D6F6F76")) {
+        if (headerText.contains("<!doctype") || headerText.contains("<html") || headerText.contains("<head")) {
+            return null
+        }
+
+        if (headerHex.contains("66747970") ||
+            headerHex.contains("6D6F6F76") ||
+            headerHex.contains("6D646174") ||
+            headerHex.contains("1A45DFA3"))
+        {
             "video"
         } else if (headerHex.startsWith("47494638")) {
             "gif"
-        } else {
+        } else if (headerHex.startsWith("FFD8FF") || headerHex.startsWith("89504E47") || headerHex.startsWith("52494646")) {
             "image"
+        } else {
+            null
         }
     } catch (e: Exception) {
-        "image"
+        null
     }
 }
 
@@ -790,6 +878,21 @@ private fun UrlUploadDialog(
     var dialogStatus by remember { mutableStateOf("") }
     var isDownloading by remember { mutableStateOf(false) }
 
+    val clipboardManager = LocalClipboardManager.current
+    var clipboardUrl by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val clipText = clipboardManager.getText()?.text?.trim()
+            if (!clipText.isNullOrBlank()) {
+                val lower = clipText.lowercase()
+                if (lower.startsWith("http://") || lower.startsWith("https://") || lower.contains("instagram.com")) {
+                    clipboardUrl = clipText
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     AlertDialog(
         onDismissRequest = { if (!isDownloading) onDismiss() },
         title = {
@@ -804,6 +907,7 @@ private fun UrlUploadDialog(
                     onValueChange = { inputUrl = it },
                     placeholder = { Text("https://example.com/video.mp4", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
                     singleLine = true,
+                    enabled = !isDownloading,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF93B5FF),
                         unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
@@ -813,9 +917,56 @@ private fun UrlUploadDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                if (clipboardUrl != null && inputUrl.isBlank() && !isDownloading) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Surface(
+                        onClick = { inputUrl = clipboardUrl ?: "" },
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF93B5FF).copy(alpha = 0.15f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF93B5FF).copy(alpha = 0.3f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.ContentPaste,
+                                contentDescription = null,
+                                tint = Color(0xFF93B5FF),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Paste detected link from clipboard",
+                                color = Color(0xFF93B5FF),
+                                fontFamily = ManropeFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                if (isDownloading) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = Color(0xFF93B5FF),
+                        trackColor = Color.White.copy(alpha = 0.1f)
+                    )
+                }
+
                 if (dialogStatus.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(dialogStatus, color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds")) Color(0xFFFF7675) else Color(0xFF7CE7D7), fontFamily = ManropeFamily, fontSize = 12.sp)
+                    Text(
+                        dialogStatus,
+                        color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds") || dialogStatus.contains("web page") || dialogStatus.contains("YouTube") || dialogStatus.contains("can't be played") || dialogStatus.contains("Tip:") || dialogStatus.contains("Couldn't read")) Color(0xFFFF7675) else Color(0xFF7CE7D7),
+                        fontFamily = ManropeFamily,
+                        fontSize = 12.sp
+                    )
                 }
             }
         },

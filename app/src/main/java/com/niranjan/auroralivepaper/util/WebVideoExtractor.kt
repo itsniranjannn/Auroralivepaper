@@ -18,105 +18,236 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.coroutines.resume
 
+sealed class InstagramExtractResult {
+    data class Success(val url: String) : InstagramExtractResult()
+    object PrivateOrLogin : InstagramExtractResult()
+    object NotFound : InstagramExtractResult()
+    object Blocked : InstagramExtractResult()
+    object NetworkError : InstagramExtractResult()
+    object Unknown : InstagramExtractResult()
+}
+
 /**
- * Ultra-fast extractor for Instagram Reels/Posts and direct video links.
- * Bypasses login redirects by directly querying the public Instagram Embed endpoint.
+ * Robust extractor for Instagram Reels/Posts and direct video links.
+ * Uses high-priority crawler scraping (Facebook/Googlebot) which returns SSR JSON containing
+ * signed progressive MP4 video streams, with Headless WebView as a fallback.
  */
 object WebVideoExtractor {
 
-    private const val TIMEOUT_MS = 10000L
+    private const val TAG = "WebVideoExtractor"
+    private const val TIMEOUT_MS = 12000L
 
     fun extractInstagramCode(url: String): String? {
-        val regex = Regex("""instagram\.com/(?:reel|reels|p|tv)/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
+        val regex = Regex("""instagram\.com/(?:[a-zA-Z0-9_.]+/)?(?:reel|reels|p|tv|share/reel)/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
         val code = regex.find(url)?.groupValues?.get(1)
         return code?.trimEnd('/')
     }
 
-    suspend fun resolveVideoUrl(context: Context, rawUrl: String): String? {
+    suspend fun resolveVideoUrl(context: Context, rawUrl: String): InstagramExtractResult {
         val trimmed = rawUrl.trim()
-        if (trimmed.isBlank()) return null
+        if (trimmed.isBlank()) return InstagramExtractResult.Unknown
 
         val instaCode = extractInstagramCode(trimmed)
         if (instaCode == null) {
-            return trimmed
+            return InstagramExtractResult.Success(trimmed)
         }
 
-        // Step 1: Direct HTML Embed Scrape (0.5s - 1s)
-        val fastScraped = withContext(Dispatchers.IO) {
-            tryScrapeInstagramEmbed(instaCode)
-        }
-        if (!fastScraped.isNullOrBlank()) {
-            Log.d("WebVideoExtractor", "Fast HTML scrape succeeded: $fastScraped")
-            return fastScraped
-        }
-
-        // Step 2: Headless WebView directly on Embed URL (1.5s - 4s)
-        val embedUrl = "https://www.instagram.com/p/$instaCode/embed/captioned/"
-        val embedResult = withContext(Dispatchers.Main) {
-            extractFromHeadlessWebView(context, embedUrl)
-        }
-        if (!embedResult.isNullOrBlank()) {
-            Log.d("WebVideoExtractor", "Headless WebView Embed extraction succeeded: $embedResult")
-            return embedResult
-        }
-
-        return null
-    }
-
-    private fun tryScrapeInstagramEmbed(code: String): String? {
-        return try {
-            val url = URL("https://www.instagram.com/p/$code/embed/captioned/")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.instanceFollowRedirects = true
-            conn.connectTimeout = 5000
-            conn.readTimeout = 5000
-            conn.setRequestProperty(
-                "User-Agent",
-                "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+        // Strategy 1: Facebook OpenGraph ExternalHit on reel URL
+        val ogResult = withContext(Dispatchers.IO) {
+            scrapePage(
+                targetUrl = "https://www.instagram.com/reel/$instaCode/",
+                userAgent = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+                strategyName = "FacebookOG"
             )
+        }
+        if (ogResult is InstagramExtractResult.Success) {
+            Log.d(TAG, "Extraction succeeded via Strategy 1 (FacebookOG)")
+            return ogResult
+        }
+
+        // Strategy 2: Googlebot Crawler on reel URL
+        val googlebotResult = withContext(Dispatchers.IO) {
+            scrapePage(
+                targetUrl = "https://www.instagram.com/reel/$instaCode/",
+                userAgent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+                strategyName = "Googlebot"
+            )
+        }
+        if (googlebotResult is InstagramExtractResult.Success) {
+            Log.d(TAG, "Extraction succeeded via Strategy 2 (Googlebot)")
+            return googlebotResult
+        }
+
+        // Strategy 3: Facebook OpenGraph on /p/ post URL
+        val postResult = withContext(Dispatchers.IO) {
+            scrapePage(
+                targetUrl = "https://www.instagram.com/p/$instaCode/",
+                userAgent = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+                strategyName = "FacebookPost"
+            )
+        }
+        if (postResult is InstagramExtractResult.Success) {
+            Log.d(TAG, "Extraction succeeded via Strategy 3 (FacebookPost)")
+            return postResult
+        }
+
+        // Strategy 4: Headless WebView
+        val webViewResult = withContext(Dispatchers.Main) {
+            extractFromHeadlessWebView(context, "https://www.instagram.com/reel/$instaCode/")
+        }
+        if (webViewResult is InstagramExtractResult.Success) {
+            Log.d(TAG, "Extraction succeeded via Strategy 4 (HeadlessWebView)")
+            return webViewResult
+        }
+
+        // If all strategies failed, evaluate the most descriptive error
+        val results = listOf(ogResult, googlebotResult, postResult, webViewResult)
+        val finalResult = when {
+            results.any { it is InstagramExtractResult.NotFound } -> InstagramExtractResult.NotFound
+            results.any { it is InstagramExtractResult.Blocked } -> InstagramExtractResult.Blocked
+            results.any { it is InstagramExtractResult.PrivateOrLogin } -> InstagramExtractResult.PrivateOrLogin
+            results.all { it is InstagramExtractResult.NetworkError } -> InstagramExtractResult.NetworkError
+            else -> InstagramExtractResult.Unknown
+        }
+
+        Log.d(TAG, "All strategies completed. Final result: $finalResult")
+        return finalResult
+    }
+
+    private fun scrapePage(targetUrl: String, userAgent: String, strategyName: String): InstagramExtractResult {
+        var conn: HttpURLConnection? = null
+        try {
+            val url = URL(targetUrl)
+            conn = url.openConnection() as HttpURLConnection
+            conn.instanceFollowRedirects = true
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
+            conn.setRequestProperty("User-Agent", userAgent)
             conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-            if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                val html = conn.inputStream.bufferedReader().use { it.readText() }
-                extractVideoUrlFromHtml(html)
-            } else null
+            conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9")
+
+            val responseCode = conn.responseCode
+            val finalUrl = conn.url?.toString() ?: ""
+            Log.d(TAG, "Strategy [$strategyName]: HTTP $responseCode, finalUrl=$finalUrl")
+
+            if (finalUrl.contains("/accounts/login") || responseCode == 401) {
+                return InstagramExtractResult.PrivateOrLogin
+            }
+            if (responseCode == 404) {
+                return InstagramExtractResult.NotFound
+            }
+            if (responseCode == 429 || responseCode == 403) {
+                return InstagramExtractResult.Blocked
+            }
+
+            val html = if (responseCode == HttpURLConnection.HTTP_OK) {
+                conn.inputStream.bufferedReader().use { it.readText() }
+            } else ""
+
+            if (html.isBlank()) {
+                return InstagramExtractResult.Unknown
+            }
+
+            val foundUrl = extractVideoUrlFromHtml(html)
+            if (!foundUrl.isNullOrBlank()) {
+                Log.d(TAG, "Strategy [$strategyName]: Video URL found, length=${foundUrl.length}")
+                return InstagramExtractResult.Success(foundUrl)
+            }
+
+            if (html.contains("Sorry, this page isn't available") ||
+                html.contains("The link you followed may be broken") ||
+                html.contains("page may have been removed")) {
+                return InstagramExtractResult.NotFound
+            }
+
+            return InstagramExtractResult.Unknown
         } catch (e: Exception) {
-            Log.w("WebVideoExtractor", "Embed scrape failed", e)
-            null
+            Log.w(TAG, "Strategy [$strategyName] error: ${e.message}")
+            return InstagramExtractResult.NetworkError
+        } finally {
+            conn?.disconnect()
         }
     }
 
-    private fun extractVideoUrlFromHtml(html: String): String? {
-        val patterns = listOf(
-            Regex(""""video_url"\s*:\s*"([^"]+)""""),
-            Regex(""""video_versions"\s*:\s*\[\{"url"\s*:\s*"([^"]+)""""),
-            Regex("""<video[^>]*src="([^"]+)""""),
-            Regex("""property="og:video"\s*content="([^"]+)""""),
-            Regex("""content="([^"]+)"\s*property="og:video"""")
-        )
+    fun extractVideoUrlFromHtml(html: String): String? {
+        val unescaped = html.replace("\\/", "/").replace("\\u0026", "&").replace("&amp;", "&")
 
-        for (pattern in patterns) {
-            val match = pattern.find(html)
-            if (match != null) {
-                var found = match.groupValues[1]
-                found = found.replace("\\u0026", "&")
+        // 1. High priority: Extract from "video_versions": [...] array in SSR JSON
+        val vvRegex = Regex(""""video_versions"\s*:\s*\[(.*?)\]""", RegexOption.DOT_MATCHES_ALL)
+        val vvMatch = vvRegex.find(unescaped)
+        if (vvMatch != null) {
+            val arrayContent = vvMatch.groupValues[1]
+            val urlRegex = Regex(""""url"\s*:\s*"([^"]+)"""")
+            val matches = urlRegex.findAll(arrayContent)
+            for (m in matches) {
+                val clean = m.groupValues[1]
                     .replace("\\/", "/")
+                    .replace("\\u0026", "&")
                     .replace("&amp;", "&")
-                if (found.startsWith("http") && (found.contains(".mp4") || found.contains("cdninstagram.com") || found.contains("fbcdn.net"))) {
-                    return found
+                if (clean.startsWith("http") && clean.contains(".mp4") && !clean.contains("_audio")) {
+                    return clean
                 }
             }
         }
+
+        // 2. Direct "video_url" field
+        val vuRegex = Regex(""""video_url"\s*:\s*"([^"]+)"""")
+        val vuMatch = vuRegex.find(unescaped)
+        if (vuMatch != null) {
+            val clean = vuMatch.groupValues[1]
+                .replace("\\/", "/")
+                .replace("\\u0026", "&")
+                .replace("&amp;", "&")
+            if (clean.startsWith("http") && !clean.contains("_audio")) {
+                return clean
+            }
+        }
+
+        // 3. Direct "playback_url" field
+        val puRegex = Regex(""""playback_url"\s*:\s*"([^"]+)"""")
+        val puMatch = puRegex.find(unescaped)
+        if (puMatch != null) {
+            val clean = puMatch.groupValues[1]
+                .replace("\\/", "/")
+                .replace("\\u0026", "&")
+                .replace("&amp;", "&")
+            if (clean.startsWith("http") && !clean.contains("_audio")) {
+                return clean
+            }
+        }
+
+        // 4. Signed CDN MP4 URL (must contain oe= or oh= token to avoid 403 Forbidden on DASH BaseURLs)
+        val signedRegex = Regex("""https://[^\s"<>\\]+\.mp4\?[^\s"<>\\]*(?:oe=|oh=)[^\s"<>\\]*""", RegexOption.IGNORE_CASE)
+        for (m in signedRegex.findAll(unescaped)) {
+            val url = m.value
+            if (!url.contains("_audio") &&
+                (url.contains("cdninstagram.com") || url.contains("fbcdn.net") || url.contains("instagram"))) {
+                return url
+            }
+        }
+
+        // 5. Fallback generic CDN MP4
+        val genericRegex = Regex("""https://[^\s"<>\\]+\.mp4[^\s"<>\\]*""", RegexOption.IGNORE_CASE)
+        for (m in genericRegex.findAll(unescaped)) {
+            val url = m.value
+            if (!url.contains("_audio") &&
+                (url.contains("cdninstagram.com") || url.contains("fbcdn.net") || url.contains("instagram"))) {
+                return url
+            }
+        }
+
         return null
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private suspend fun extractFromHeadlessWebView(context: Context, urlToLoad: String): String? =
+    private suspend fun extractFromHeadlessWebView(context: Context, urlToLoad: String): InstagramExtractResult =
         suspendCancellableCoroutine { continuation ->
             var webView: WebView? = null
             var isFinished = false
+            var hitLoginWall = false
             val mainHandler = Handler(Looper.getMainLooper())
 
-            fun cleanupAndReturn(resultUrl: String?) {
+            fun cleanupAndReturn(result: InstagramExtractResult) {
                 if (isFinished) return
                 isFinished = true
                 mainHandler.removeCallbacksAndMessages(null)
@@ -128,12 +259,17 @@ object WebVideoExtractor {
                 webView = null
 
                 if (continuation.isActive) {
-                    continuation.resume(resultUrl)
+                    continuation.resume(result)
                 }
             }
 
             val timeoutRunnable = Runnable {
-                cleanupAndReturn(null)
+                Log.d(TAG, "Strategy [HeadlessWebView]: Timeout")
+                if (hitLoginWall) {
+                    cleanupAndReturn(InstagramExtractResult.PrivateOrLogin)
+                } else {
+                    cleanupAndReturn(InstagramExtractResult.Unknown)
+                }
             }
             mainHandler.postDelayed(timeoutRunnable, TIMEOUT_MS)
 
@@ -145,7 +281,6 @@ object WebVideoExtractor {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
-                settings.databaseEnabled = false
                 settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.userAgentString =
                     "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
@@ -160,10 +295,13 @@ object WebVideoExtractor {
                             (function() {
                                 var v = document.querySelector('video');
                                 if (v && v.src && v.src.startsWith('http')) return v.src;
-                                var sources = document.querySelectorAll('video source, video');
+                                var sources = document.querySelectorAll('video source');
                                 for (var i = 0; i < sources.length; i++) {
                                     if (sources[i].src && sources[i].src.startsWith('http')) return sources[i].src;
                                 }
+                                var html = document.documentElement.innerHTML;
+                                var m = html.match(/"video_versions":\[\{.*?"url":"([^"]+)"/);
+                                if (m && m[1]) return m[1];
                                 var og = document.querySelector('meta[property="og:video"]');
                                 if (og && og.content && og.content.startsWith('http')) return og.content;
                                 return null;
@@ -174,12 +312,14 @@ object WebVideoExtractor {
                                 val clean = result.removeSurrounding("\"")
                                     .replace("\\u0026", "&")
                                     .replace("\\/", "/")
-                                if (clean.startsWith("http")) {
-                                    cleanupAndReturn(clean)
+                                    .replace("&amp;", "&")
+                                if (clean.startsWith("http") && !clean.contains("_audio")) {
+                                    Log.d(TAG, "Strategy [HeadlessWebView]: Video found from DOM evaluation")
+                                    cleanupAndReturn(InstagramExtractResult.Success(clean))
                                     return@evaluateJavascript
                                 }
                             }
-                            if (attempts < 15 && !isFinished) {
+                            if (attempts < 12 && !isFinished) {
                                 mainHandler.postDelayed(this, 500)
                             }
                         }
@@ -189,8 +329,9 @@ object WebVideoExtractor {
                 wv.webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                         val reqUrl = request?.url?.toString() ?: ""
-                        if (reqUrl.contains("accounts/login") || reqUrl.contains("login/")) {
-                            return true // Block login redirect
+                        if (reqUrl.contains("/accounts/login") || reqUrl.contains("login/")) {
+                            hitLoginWall = true
+                            return true
                         }
                         return false
                     }
@@ -202,7 +343,8 @@ object WebVideoExtractor {
                         val reqUrl = request?.url?.toString() ?: ""
                         if (isVideoMediaUrl(reqUrl)) {
                             mainHandler.post {
-                                cleanupAndReturn(reqUrl)
+                                Log.d(TAG, "Strategy [HeadlessWebView]: Video intercepted via network request")
+                                cleanupAndReturn(InstagramExtractResult.Success(reqUrl))
                             }
                         }
                         return super.shouldInterceptRequest(view, request)
@@ -216,25 +358,28 @@ object WebVideoExtractor {
 
                 continuation.invokeOnCancellation {
                     mainHandler.post {
-                        cleanupAndReturn(null)
+                        cleanupAndReturn(InstagramExtractResult.Unknown)
                     }
                 }
 
                 wv.loadUrl(urlToLoad)
 
             } catch (e: Exception) {
-                cleanupAndReturn(null)
+                Log.w(TAG, "Strategy [HeadlessWebView] exception: ${e.message}")
+                cleanupAndReturn(InstagramExtractResult.Unknown)
             }
         }
 
     private fun isVideoMediaUrl(url: String): Boolean {
         if (!url.startsWith("http", ignoreCase = true)) return false
+        if (url.contains("audio", ignoreCase = true) && !url.contains("video", ignoreCase = true)) return false
+
         val uri = Uri.parse(url)
         val host = uri.host?.lowercase() ?: ""
         val path = uri.path?.lowercase() ?: ""
 
         val isCdn = host.contains("cdninstagram.com") || host.contains("fbcdn.net") || host.contains("instagram")
-        val isMp4 = path.endsWith(".mp4") || url.contains(".mp4") || url.contains("mime_type=video_mp4") || url.contains("t50.") || url.contains("bytestart")
+        val isMp4 = path.endsWith(".mp4") || url.contains(".mp4") || url.contains("mime_type=video_mp4")
 
         return isCdn && isMp4
     }

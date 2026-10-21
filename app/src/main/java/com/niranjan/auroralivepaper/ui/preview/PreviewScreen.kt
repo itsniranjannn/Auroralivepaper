@@ -7,10 +7,13 @@ import android.view.ViewGroup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +33,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.niranjan.auroralivepaper.data.SettingsPrefs
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import java.io.File
 
@@ -48,6 +52,17 @@ fun PreviewScreen(
     var showGuidanceDialog by remember { mutableStateOf(false) }
     var guidanceMessage by remember { mutableStateOf("") }
     var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    var isSoundOn by remember { mutableStateOf(SettingsPrefs.playWallpaperSound(context)) }
+    var volumeVal by remember { mutableStateOf(SettingsPrefs.wallpaperVolume(context)) }
+    var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayerInstance?.release()
+            exoPlayerInstance = null
+        }
+    }
 
     val loadedBitmap = remember(mediaPath, imageBitmap) {
         imageBitmap ?: if (mediaPath != null && File(mediaPath).exists()) {
@@ -68,13 +83,15 @@ fun PreviewScreen(
                             )
                             useController = false
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            player = ExoPlayer.Builder(context).build().apply {
+                            val player = ExoPlayer.Builder(context).build().apply {
                                 setMediaItem(MediaItem.fromUri(Uri.fromFile(File(mediaPath))))
                                 repeatMode = ExoPlayer.REPEAT_MODE_ALL
-                                volume = 0f
+                                volume = if (isSoundOn) volumeVal else 0f
                                 prepare()
                                 play()
                             }
+                            this.player = player
+                            exoPlayerInstance = player
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -92,6 +109,31 @@ fun PreviewScreen(
                         contentScale = ContentScale.Fit
                     )
                 }
+            }
+        }
+
+        // Floating audio button in top right for videos
+        if (mediaType == "video") {
+            IconButton(
+                onClick = {
+                    isSoundOn = !isSoundOn
+                    SettingsPrefs.setPlayWallpaperSound(context, isSoundOn)
+                    exoPlayerInstance?.volume = if (isSoundOn) volumeVal else 0f
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF0D121F).copy(alpha = 0.85f))
+                    .size(44.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                    contentDescription = "Toggle sound",
+                    tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
 
@@ -121,7 +163,82 @@ fun PreviewScreen(
                     fontSize = 12.sp
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (mediaType == "video") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White.copy(alpha = 0.07f))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                            contentDescription = null,
+                            tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isSoundOn) "Audio enabled (${(volumeVal * 100).toInt()}%)" else "Audio muted",
+                                color = Color.White,
+                                fontFamily = ManropeFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "Home screen only • Lock screen stays silent",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontFamily = ManropeFamily,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = isSoundOn,
+                            onCheckedChange = { checked ->
+                                isSoundOn = checked
+                                SettingsPrefs.setPlayWallpaperSound(context, checked)
+                                exoPlayerInstance?.volume = if (checked) volumeVal else 0f
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF00B894),
+                                uncheckedThumbColor = Color.White.copy(alpha = 0.6f),
+                                uncheckedTrackColor = Color.White.copy(alpha = 0.15f)
+                            )
+                        )
+                    }
+
+                    if (isSoundOn) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)
+                        ) {
+                            Text("Volume", color = Color.White.copy(alpha = 0.5f), fontFamily = ManropeFamily, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Slider(
+                                value = volumeVal,
+                                onValueChange = { newVol ->
+                                    volumeVal = newVol
+                                    SettingsPrefs.setWallpaperVolume(context, newVol)
+                                    exoPlayerInstance?.volume = newVol
+                                },
+                                valueRange = 0.05f..1f,
+                                modifier = Modifier.weight(1f),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFF7CE7D7),
+                                    activeTrackColor = Color(0xFF7CE7D7),
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                                )
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
 
                 Button(
                     onClick = {
