@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -18,56 +19,45 @@ import java.net.URL
 import kotlin.coroutines.resume
 
 /**
- * Extracts direct downloadable video URLs (.mp4) for Instagram Reels, Posts, and web pages.
- * Runs safely in a headless WebView on the Main thread and guarantees zero lingering resource
- * or battery consumption by immediately destroying the WebView upon completion or timeout.
+ * High-performance extractor for Instagram Reels/Posts and direct video links.
+ * Uses headless native WebView loading the Instagram embed endpoint on Main thread.
  */
 object WebVideoExtractor {
 
-    private const val TIMEOUT_MS = 25000L
+    private const val TIMEOUT_MS = 15000L
 
-    /**
-     * Extracts an Instagram shortcode from Reel or Post links.
-     */
     fun extractInstagramCode(url: String): String? {
         val regex = Regex("""instagram\.com/(?:reel|reels|p|tv)/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
         val code = regex.find(url)?.groupValues?.get(1)
         return code?.trimEnd('/')
     }
 
-    /**
-     * Resolves the direct video MP4 URL from an Instagram or web video link.
-     * Uses headless native WebView extraction on Main thread.
-     */
     suspend fun resolveVideoUrl(context: Context, rawUrl: String): String? {
-        val instaCode = extractInstagramCode(rawUrl)
-        if (instaCode != null) {
-            // Attempt 1: Load Instagram reel directly in real browser environment
-            val reelUrl = "https://www.instagram.com/reel/$instaCode/"
-            val reelResult = withContext(Dispatchers.Main) {
-                extractFromHeadlessWebView(context, reelUrl)
-            }
-            if (!reelResult.isNullOrBlank()) {
-                return reelResult
-            }
+        val trimmed = rawUrl.trim()
+        if (trimmed.isBlank()) return null
 
-            // Attempt 2: Load Instagram post link
-            val postUrl = "https://www.instagram.com/p/$instaCode/"
-            val postResult = withContext(Dispatchers.Main) {
-                extractFromHeadlessWebView(context, postUrl)
-            }
-            if (!postResult.isNullOrBlank()) {
-                return postResult
-            }
+        val instaCode = extractInstagramCode(trimmed)
+        if (instaCode == null) {
+            return trimmed
+        }
 
-            // Attempt 3: Embed endpoint
-            val embedUrl = "https://www.instagram.com/p/$instaCode/embed/captioned/"
-            val embedResult = withContext(Dispatchers.Main) {
-                extractFromHeadlessWebView(context, embedUrl)
-            }
-            if (!embedResult.isNullOrBlank()) {
-                return embedResult
-            }
+        // Fast Path 1: Rapid HTML Embed Scraping
+        val fastScraped = withContext(Dispatchers.IO) {
+            tryScrapeInstagramEmbed(instaCode)
+        }
+        if (!fastScraped.isNullOrBlank()) {
+            Log.d("WebVideoExtractor", "Fast HTML scrape succeeded: $fastScraped")
+            return fastScraped
+        }
+
+        // Fast Path 2: Single-pass Headless WebView on Instagram Embed URL
+        val embedUrl = "https://www.instagram.com/p/$instaCode/embed/captioned/"
+        val webViewResult = withContext(Dispatchers.Main) {
+            extractFromHeadlessWebView(context, embedUrl)
+        }
+        if (!webViewResult.isNullOrBlank()) {
+            Log.d("WebVideoExtractor", "Headless WebView extraction succeeded: $webViewResult")
+            return webViewResult
         }
 
         return null
@@ -78,8 +68,8 @@ object WebVideoExtractor {
             val url = URL("https://www.instagram.com/p/$code/embed/captioned/")
             val conn = url.openConnection() as HttpURLConnection
             conn.instanceFollowRedirects = true
-            conn.connectTimeout = 8000
-            conn.readTimeout = 8000
+            conn.connectTimeout = 6000
+            conn.readTimeout = 6000
             conn.setRequestProperty(
                 "User-Agent",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -89,13 +79,13 @@ object WebVideoExtractor {
                 val html = conn.inputStream.bufferedReader().use { it.readText() }
                 extractVideoUrlFromHtml(html)
             } else null
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w("WebVideoExtractor", "Embed scrape failed", e)
             null
         }
     }
 
     private fun extractVideoUrlFromHtml(html: String): String? {
-        // Check for video_url in JSON / scripts
         val patterns = listOf(
             Regex(""""video_url"\s*:\s*"([^"]+)""""),
             Regex(""""video_versions"\s*:\s*\[\{"url"\s*:\s*"([^"]+)""""),
@@ -108,7 +98,6 @@ object WebVideoExtractor {
             val match = pattern.find(html)
             if (match != null) {
                 var found = match.groupValues[1]
-                // Unescape JSON unicode and backslashes
                 found = found.replace("\\u0026", "&")
                     .replace("\\/", "/")
                     .replace("&amp;", "&")
@@ -161,6 +150,42 @@ object WebVideoExtractor {
                 settings.userAgentString =
                     "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
 
+                val checkDomRunnable = object : Runnable {
+                    var attempts = 0
+                    override fun run() {
+                        if (isFinished || webView == null) return
+                        attempts++
+                        wv.evaluateJavascript(
+                            """
+                            (function() {
+                                var v = document.querySelector('video');
+                                if (v && v.src && v.src.startsWith('http')) return v.src;
+                                var sources = document.querySelectorAll('video source, video');
+                                for (var i = 0; i < sources.length; i++) {
+                                    if (sources[i].src && sources[i].src.startsWith('http')) return sources[i].src;
+                                }
+                                var og = document.querySelector('meta[property="og:video"]');
+                                if (og && og.content && og.content.startsWith('http')) return og.content;
+                                return null;
+                            })();
+                            """.trimIndent()
+                        ) { result ->
+                            if (!result.isNullOrBlank() && result != "null") {
+                                val clean = result.removeSurrounding("\"")
+                                    .replace("\\u0026", "&")
+                                    .replace("\\/", "/")
+                                if (clean.startsWith("http")) {
+                                    cleanupAndReturn(clean)
+                                    return@evaluateJavascript
+                                }
+                            }
+                            if (attempts < 20 && !isFinished) {
+                                mainHandler.postDelayed(this, 500)
+                            }
+                        }
+                    }
+                }
+
                 wv.webViewClient = object : WebViewClient() {
                     override fun shouldInterceptRequest(
                         view: WebView?,
@@ -177,29 +202,7 @@ object WebVideoExtractor {
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        // In addition to network interception, query the DOM for video tag or open graph tags
-                        wv.evaluateJavascript(
-                            """
-                            (function() {
-                                var v = document.querySelector('video');
-                                if (v && v.src && v.src.startsWith('http')) return v.src;
-                                var source = document.querySelector('video > source');
-                                if (source && source.src && source.src.startsWith('http')) return source.src;
-                                var og = document.querySelector('meta[property="og:video"]');
-                                if (og && og.content && og.content.startsWith('http')) return og.content;
-                                return null;
-                            })();
-                            """.trimIndent()
-                        ) { result ->
-                            if (!result.isNullOrBlank() && result != "null") {
-                                val clean = result.removeSurrounding("\"")
-                                    .replace("\\u0026", "&")
-                                    .replace("\\/", "/")
-                                if (clean.startsWith("http")) {
-                                    cleanupAndReturn(clean)
-                                }
-                            }
-                        }
+                        mainHandler.post(checkDomRunnable)
                     }
                 }
 
@@ -222,10 +225,9 @@ object WebVideoExtractor {
         val host = uri.host?.lowercase() ?: ""
         val path = uri.path?.lowercase() ?: ""
 
-        val isCdn = host.contains("cdninstagram.com") || host.contains("fbcdn.net") || host.contains("instagram.")
-        val isMp4 = path.endsWith(".mp4") || url.contains(".mp4") || url.contains("mime_type=video_mp4")
+        val isCdn = host.contains("cdninstagram.com") || host.contains("fbcdn.net") || host.contains("instagram")
+        val isMp4 = path.endsWith(".mp4") || url.contains(".mp4") || url.contains("mime_type=video_mp4") || url.contains("t50.") || url.contains("bytestart")
 
         return isCdn && isMp4
     }
 }
-
