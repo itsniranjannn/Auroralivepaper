@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -12,6 +13,7 @@ import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Shader
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.BatteryManager
 import android.os.Handler
@@ -68,6 +70,8 @@ class AuroraWallpaperService : WallpaperService() {
         private val mediaListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             try {
                 if (key == "media_version") {
+                    val savedPath = mediaPrefs.getString("media_path", null)
+                    Log.d("AuroraEngine", "media_version changed: reload media from path=$savedPath")
                     currentHolder?.let { loadWallpaper(it) }
                 }
             } catch (e: Exception) {
@@ -134,7 +138,9 @@ class AuroraWallpaperService : WallpaperService() {
                 super.onSurfaceCreated(holder)
                 Log.d("AuroraEngine", "onSurfaceCreated: surfaceValid=${holder.surface.isValid}, isPreview=$isPreview")
                 currentHolder = holder
-                loadWallpaper(holder)
+                if (mediaPlayer == null && gifMovie == null && !shouldPause()) {
+                    loadWallpaper(holder)
+                }
             } catch (e: Exception) {
                 Log.e("AuroraEngine", "Error in onSurfaceCreated", e)
             }
@@ -166,7 +172,7 @@ class AuroraWallpaperService : WallpaperService() {
                     registerPowerReceiver()
                     refreshPowerState()
                     currentHolder?.let { holder ->
-                        if (holder.surface.isValid && mediaPlayer == null && gifMovie == null) {
+                        if (holder.surface.isValid && mediaPlayer == null && gifMovie == null && !shouldPause()) {
                             loadWallpaper(holder)
                         }
                     }
@@ -256,6 +262,19 @@ class AuroraWallpaperService : WallpaperService() {
                         mp.setVolume(actualVol, actualVol)
                         val loop = SettingsPrefs.loopAutomatically(applicationContext)
                         mp.isLooping = loop
+
+                        if (!playSound) {
+                            try {
+                                val trackInfo = mp.trackInfo
+                                for (i in trackInfo.indices) {
+                                    if (trackInfo[i].trackType == MediaPlayer.TrackInfo.MEDIA_TRACK_TYPE_AUDIO) {
+                                        mp.deselectTrack(i)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w("AuroraEngine", "Could not deselect audio track", e)
+                            }
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("AuroraEngine", "Failed to update player settings", e)
@@ -266,6 +285,7 @@ class AuroraWallpaperService : WallpaperService() {
         private fun shouldPause(): Boolean {
             if (isPreview) return false
             if (!isVisibleState) return true
+            if (SettingsPrefs.pauseOnBatterySaver(applicationContext) && isPowerSave) return true
             if (isBatteryLow) return true
             return false
         }
@@ -273,7 +293,7 @@ class AuroraWallpaperService : WallpaperService() {
         private fun updatePlaybackState() {
             try {
                 val pause = shouldPause()
-                Log.d("AuroraEngine", "updatePlaybackState: pause=$pause, isVisible=$isVisibleState, isPreview=$isPreview, isPrepared=$isPrepared")
+                Log.d("AuroraEngine", "updatePlaybackState: pause=$pause, isVisible=$isVisibleState, isPreview=$isPreview, isPrepared=$isPrepared, isPowerSave=$isPowerSave")
                 if (pause) {
                     if (isPrepared && mediaPlayer != null) {
                         try {
@@ -286,8 +306,16 @@ class AuroraWallpaperService : WallpaperService() {
                     }
                     gifRunning = false
                     gifHandler.removeCallbacks(gifDrawRunnable)
+
+                    currentHolder?.let { holder ->
+                        if (holder.surface.isValid && isVisibleState && !isPreview && isPowerSave && SettingsPrefs.pauseOnBatterySaver(applicationContext)) {
+                            drawPosterFrame(holder)
+                        }
+                    }
                 } else {
-                    if (isPrepared && mediaPlayer != null) {
+                    if (mediaPlayer == null && currentHolder?.surface?.isValid == true && !gifRunning) {
+                        currentHolder?.let { loadWallpaper(it) }
+                    } else if (isPrepared && mediaPlayer != null) {
                         try {
                             if (mediaPlayer?.isPlaying == false) {
                                 mediaPlayer?.start()
@@ -332,6 +360,41 @@ class AuroraWallpaperService : WallpaperService() {
                 }
             } catch (e: Exception) {
                 Log.e("AuroraEngine", "Error in loadWallpaper", e)
+            }
+        }
+
+        private fun drawPosterFrame(holder: SurfaceHolder) {
+            val posterFile = File(applicationContext.filesDir, "current_wallpaper_poster.jpg")
+            if (posterFile.exists()) {
+                var canvas: Canvas? = null
+                try {
+                    val bitmap = BitmapFactory.decodeFile(posterFile.absolutePath)
+                    if (bitmap != null) {
+                        canvas = holder.lockCanvas()
+                        if (canvas != null) {
+                            val w = canvas.width.toFloat()
+                            val h = canvas.height.toFloat()
+                            val scale = maxOf(w / bitmap.width, h / bitmap.height)
+                            val dx = (w - bitmap.width * scale) / 2f
+                            val dy = (h - bitmap.height * scale) / 2f
+                            canvas.drawColor(Color.BLACK)
+                            canvas.save()
+                            canvas.translate(dx, dy)
+                            canvas.scale(scale, scale)
+                            canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            canvas.restore()
+                        }
+                        bitmap.recycle()
+                    } else {
+                        drawAuroraFallbackTheme(holder)
+                    }
+                } catch (e: Exception) {
+                    Log.e("AuroraEngine", "Error drawing poster frame", e)
+                } finally {
+                    canvas?.let { holder.unlockCanvasAndPost(it) }
+                }
+            } else {
+                drawAuroraFallbackTheme(holder)
             }
         }
 
@@ -407,8 +470,18 @@ class AuroraWallpaperService : WallpaperService() {
 
                 Log.d("AuroraEngine", "startVideo: preparing MediaPlayer for $filePath")
                 mediaPlayer = MediaPlayer().apply {
-                    setSurface(holder.surface)
                     setDataSource(filePath)
+
+                    val audioAttr = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build()
+                    setAudioAttributes(audioAttr)
+
+                    if (holder.surface.isValid) {
+                        setSurface(holder.surface)
+                    }
+
                     setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                     setOnPreparedListener { mp ->
                         Log.d("AuroraEngine", "MediaPlayer prepared successfully: duration=${mp.duration}ms, isPreview=$isPreview")
@@ -424,6 +497,9 @@ class AuroraWallpaperService : WallpaperService() {
                         Log.e("AuroraEngine", "MediaPlayer onError: what=$what, extra=$extra")
                         isPrepared = false
                         releasePlayer()
+                        currentHolder?.let { holder ->
+                            if (holder.surface.isValid) drawPosterFrame(holder)
+                        }
                         gifHandler.postDelayed({
                             currentHolder?.let { loadWallpaper(it) }
                         }, 500)
