@@ -20,7 +20,7 @@ import kotlin.coroutines.resume
 
 /**
  * High-performance extractor for Instagram Reels/Posts and direct video links.
- * Uses headless native WebView loading the Instagram embed endpoint on Main thread.
+ * Uses headless native WebView loading the Instagram Reel and Embed endpoints on Main thread.
  */
 object WebVideoExtractor {
 
@@ -41,7 +41,7 @@ object WebVideoExtractor {
             return trimmed
         }
 
-        // Fast Path 1: Rapid HTML Embed Scraping
+        // Attempt 1: Fast HTML Embed Scraping
         val fastScraped = withContext(Dispatchers.IO) {
             tryScrapeInstagramEmbed(instaCode)
         }
@@ -50,14 +50,24 @@ object WebVideoExtractor {
             return fastScraped
         }
 
-        // Fast Path 2: Single-pass Headless WebView on Instagram Embed URL
+        // Attempt 2: Direct Reel URL in Headless WebView
+        val reelUrl = "https://www.instagram.com/reel/$instaCode/"
+        val reelResult = withContext(Dispatchers.Main) {
+            extractFromHeadlessWebView(context, reelUrl)
+        }
+        if (!reelResult.isNullOrBlank()) {
+            Log.d("WebVideoExtractor", "Headless WebView Reel extraction succeeded: $reelResult")
+            return reelResult
+        }
+
+        // Attempt 3: Embed Endpoint in Headless WebView
         val embedUrl = "https://www.instagram.com/p/$instaCode/embed/captioned/"
-        val webViewResult = withContext(Dispatchers.Main) {
+        val embedResult = withContext(Dispatchers.Main) {
             extractFromHeadlessWebView(context, embedUrl)
         }
-        if (!webViewResult.isNullOrBlank()) {
-            Log.d("WebVideoExtractor", "Headless WebView extraction succeeded: $webViewResult")
-            return webViewResult
+        if (!embedResult.isNullOrBlank()) {
+            Log.d("WebVideoExtractor", "Headless WebView Embed extraction succeeded: $embedResult")
+            return embedResult
         }
 
         return null
