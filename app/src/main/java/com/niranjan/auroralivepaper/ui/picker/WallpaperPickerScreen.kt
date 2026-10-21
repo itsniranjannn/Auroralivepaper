@@ -4,14 +4,22 @@ import android.R
 import android.app.Activity
 import android.app.WallpaperManager
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Movie
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
+import android.media.MediaMuxer
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
@@ -78,6 +86,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.ByteBuffer
 import java.util.Calendar
 
 data class RecentWallpaper(val path: String, val type: String, val timestamp: Long)
@@ -107,6 +116,25 @@ fun WallpaperPickerScreen(
     val prefs = remember { context.getSharedPreferences("aurora_prefs", Context.MODE_PRIVATE) }
     var activePath by remember { mutableStateOf(prefs.getString("media_path", null)) }
     var activeType by remember { mutableStateOf(prefs.getString("media_type", "video")) }
+
+    val wm = remember(context) { WallpaperManager.getInstance(context) }
+    var activeWallpaperInfo by remember { mutableStateOf(try { wm.wallpaperInfo } catch (e: Exception) { null }) }
+
+    DisposableEffect(Unit) {
+        val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            activeWallpaperInfo = try { wm.wallpaperInfo } catch (e: Exception) { null }
+            activePath = prefs.getString("media_path", null)
+            activeType = prefs.getString("media_type", "video")
+        }
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
+        }
+    }
+
+    val isOurWallpaperActive = activeWallpaperInfo != null &&
+            activeWallpaperInfo?.packageName == context.packageName &&
+            activeWallpaperInfo?.serviceName == AuroraWallpaperService::class.java.name
 
     LaunchedEffect(Unit) {
         delay(40); showHeader = true
@@ -263,7 +291,7 @@ fun WallpaperPickerScreen(
                     enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400))
                 ) {
                     HeroNowPlayingCard(
-                        activePath = activePath,
+                        activePath = if (isOurWallpaperActive) activePath else null,
                         activeType = activeType ?: "video",
                         onClick = {
                             val path = activePath
@@ -557,11 +585,6 @@ private fun detectRealFileType(file: File): String {
     } catch (e: Exception) {
         "image"
     }
-}
-
-private fun extractInstagramCode(url: String): String? {
-    val regex = Regex("""instagram\.com/(?:reel|reels|p)/([A-Za-z0-9_-]+)""")
-    return regex.find(url)?.groupValues?.get(1)
 }
 
 @Composable
@@ -889,18 +912,6 @@ fun addRecentWallpaper(context: Context, path: String, type: String) {
 
 @UnstableApi
 fun launchLiveWallpaperPicker(context: Context) {
-    // If the live wallpaper is already active as the system wallpaper component, notify user directly!
-    val wm = WallpaperManager.getInstance(context)
-    val wallpaperInfo = try { wm.wallpaperInfo } catch (e: Exception) { null }
-    val isAlreadySet = wallpaperInfo != null &&
-            wallpaperInfo.packageName == context.packageName &&
-            wallpaperInfo.serviceName == AuroraWallpaperService::class.java.name
-
-    if (isAlreadySet) {
-        Toast.makeText(context, "Live Wallpaper updated!", Toast.LENGTH_SHORT).show()
-        return
-    }
-
     try {
         val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
             putExtra(
@@ -940,23 +951,113 @@ fun copyMediaToAppStorage(context: Context, uri: Uri, fileName: String): String 
 
 fun promoteStagingToActive(context: Context, stagingPath: String, type: String): String {
     val ext = if (type == "gif") "gif" else if (type == "video") "mp4" else "jpg"
-    val activeFile = File(context.filesDir, "current_wallpaper_$type.$ext")
+    val timestamp = System.currentTimeMillis()
+    val activeFile = File(context.filesDir, "wallpaper_${timestamp}.$ext")
     val stagingFile = File(stagingPath)
-    if (stagingFile.exists() && stagingFile.absolutePath != activeFile.absolutePath) {
+    if (stagingFile.exists()) {
         stagingFile.copyTo(activeFile, overwrite = true)
         stagingFile.delete()
     }
-    // Ensure world/service readable
     activeFile.setReadable(true, false)
 
-    // Save to recents (keep top 3 wallpapers up to 150MB cap for 1-tap re-apply)
-    val recentFile = File(context.filesDir, "recent_${System.currentTimeMillis()}.$ext")
+    if (type == "video") {
+        generatePosterFrame(context, activeFile.absolutePath)
+    }
+
+    cleanupOldActiveWallpapers(context, activeFile.name)
+
+    val recentFile = File(context.filesDir, "recent_${timestamp}.$ext")
     activeFile.copyTo(recentFile, overwrite = true)
     recentFile.setReadable(true, false)
     addRecentWallpaper(context, recentFile.absolutePath, type)
 
-    saveWallpaperMediaPath(context, activeFile.absolutePath, type)
     return activeFile.absolutePath
+}
+
+fun cleanupOldActiveWallpapers(context: Context, currentFileName: String) {
+    try {
+        context.filesDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith("wallpaper_") && file.name != currentFileName) {
+                file.delete()
+            }
+        }
+    } catch (e: Exception) {
+        Log.w("Aurora", "Error cleaning old active wallpapers", e)
+    }
+}
+
+fun generatePosterFrame(context: Context, videoPath: String) {
+    try {
+        val posterFile = File(context.filesDir, "current_wallpaper_poster.jpg")
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(videoPath)
+        val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+        val durationMs = durationStr?.toLongOrNull() ?: 1000L
+
+        val percentages = listOf(0.50f, 0.35f, 0.65f, 0.20f, 0.80f, 0.10f)
+        var bestFrame: Bitmap? = null
+        var maxLuma = -1f
+
+        for (pct in percentages) {
+            val targetMs = (durationMs * pct).toLong().coerceIn(10L, durationMs)
+            val micros = targetMs * 1000L
+            val frame = retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST)
+            if (frame != null) {
+                val scaled16 = Bitmap.createScaledBitmap(frame, 16, 16, true)
+                var totalLuma = 0f
+                for (x in 0 until 16) {
+                    for (y in 0 until 16) {
+                        val px = scaled16.getPixel(x, y)
+                        val r = (px shr 16) and 0xFF
+                        val g = (px shr 8) and 0xFF
+                        val b = px and 0xFF
+                        val luma = 0.299f * r + 0.587f * g + 0.114f * b
+                        totalLuma += luma
+                    }
+                }
+                scaled16.recycle()
+                val avgLuma = totalLuma / 256f
+                if (avgLuma > maxLuma) {
+                    maxLuma = avgLuma
+                    bestFrame = frame
+                }
+                if (avgLuma > 25f) break
+            }
+        }
+        retriever.release()
+
+        if (bestFrame != null) {
+            val softwareBitmap = if (bestFrame.config == Bitmap.Config.HARDWARE) {
+                bestFrame.copy(Bitmap.Config.ARGB_8888, false)
+            } else {
+                bestFrame
+            }
+            val metrics = context.resources.displayMetrics
+            val screenW = metrics.widthPixels
+            val screenH = metrics.heightPixels
+
+            val srcW = softwareBitmap.width
+            val srcH = softwareBitmap.height
+
+            val scale = maxOf(screenW.toFloat() / srcW, screenH.toFloat() / srcH)
+            val scaledW = (srcW * scale).toInt()
+            val scaledH = (srcH * scale).toInt()
+
+            val scaledBitmap = Bitmap.createScaledBitmap(softwareBitmap, scaledW, scaledH, true)
+            val cropX = ((scaledW - screenW) / 2).coerceAtLeast(0)
+            val cropY = ((scaledH - screenH) / 2).coerceAtLeast(0)
+
+            val finalCropped = Bitmap.createBitmap(scaledBitmap, cropX, cropY, screenW, screenH)
+
+            FileOutputStream(posterFile).use { out ->
+                finalCropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            posterFile.setReadable(true, false)
+            Log.d("AuroraPicker", "Poster frame saved to ${posterFile.absolutePath}")
+        }
+    } catch (e: Exception) {
+        Log.e("AuroraPicker", "generatePosterFrame failed", e)
+    }
 }
 
 fun cleanupStagingFiles(context: Context) {
@@ -980,28 +1081,85 @@ fun saveWallpaperMediaPath(context: Context, path: String, type: String) {
         .apply()
 }
 
-fun applyLockScreenFromVideo(context: Context, videoPath: String, seconds: Float): Boolean {
+fun applyLockScreenFromVideo(context: Context, videoPath: String, seconds: Float = 1f): Boolean {
     return try {
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(videoPath)
         val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
         val durationMs = durationStr?.toLongOrNull() ?: 1000L
-        val requestedMs = (seconds * 1000f).toLong()
-        val targetMs = requestedMs.coerceIn(100L, durationMs)
-        val micros = targetMs * 1000L
-        val frame = retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) 
-            ?: retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST)
-            ?: retriever.frameAtTime
-        retriever.release()
-        if (frame != null) {
-            val softwareBitmap = if (frame.config == Bitmap.Config.HARDWARE) {
-                frame.copy(Bitmap.Config.ARGB_8888, false)
-            } else {
-                frame
+
+        val percentages = listOf(0.50f, 0.35f, 0.65f, 0.20f, 0.80f, 0.10f)
+        var bestFrame: Bitmap? = null
+        var maxLuma = -1f
+
+        for (pct in percentages) {
+            val targetMs = (durationMs * pct).toLong().coerceIn(10L, durationMs)
+            val micros = targetMs * 1000L
+            val frame = retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST)
+            if (frame != null) {
+                val scaled16 = Bitmap.createScaledBitmap(frame, 16, 16, true)
+                var totalLuma = 0f
+                for (x in 0 until 16) {
+                    for (y in 0 until 16) {
+                        val px = scaled16.getPixel(x, y)
+                        val r = (px shr 16) and 0xFF
+                        val g = (px shr 8) and 0xFF
+                        val b = px and 0xFF
+                        val luma = 0.299f * r + 0.587f * g + 0.114f * b
+                        totalLuma += luma
+                    }
+                }
+                scaled16.recycle()
+                val avgLuma = totalLuma / 256f
+                Log.d("AuroraPicker", "Frame at ${(pct * 100).toInt()}% (${targetMs}ms): luma=$avgLuma")
+
+                if (avgLuma > maxLuma) {
+                    maxLuma = avgLuma
+                    bestFrame = frame
+                }
+
+                if (avgLuma > 25f) {
+                    break
+                }
             }
-            WallpaperManager.getInstance(context)
-                .setBitmap(softwareBitmap, null, true, WallpaperManager.FLAG_LOCK)
-            true
+        }
+        retriever.release()
+
+        if (bestFrame != null) {
+            val softwareBitmap = if (bestFrame.config == Bitmap.Config.HARDWARE) {
+                bestFrame.copy(Bitmap.Config.ARGB_8888, false)
+            } else {
+                bestFrame
+            }
+
+            val metrics = context.resources.displayMetrics
+            val screenW = metrics.widthPixels
+            val screenH = metrics.heightPixels
+
+            val srcW = softwareBitmap.width
+            val srcH = softwareBitmap.height
+
+            val scale = maxOf(screenW.toFloat() / srcW, screenH.toFloat() / srcH)
+            val scaledW = (srcW * scale).toInt()
+            val scaledH = (srcH * scale).toInt()
+
+            val scaledBitmap = Bitmap.createScaledBitmap(softwareBitmap, scaledW, scaledH, true)
+            val cropX = ((scaledW - screenW) / 2).coerceAtLeast(0)
+            val cropY = ((scaledH - screenH) / 2).coerceAtLeast(0)
+
+            val finalCropped = Bitmap.createBitmap(scaledBitmap, cropX, cropY, screenW, screenH)
+
+            val success = try {
+                WallpaperManager.getInstance(context)
+                    .setBitmap(finalCropped, null, true, WallpaperManager.FLAG_LOCK)
+                true
+            } catch (e: Exception) {
+                Log.e("AuroraPicker", "WallpaperManager.setBitmap failed", e)
+                false
+            }
+
+            Log.d("AuroraPicker", "applyLockScreenFromVideo result=$success, maxLuma=$maxLuma")
+            success
         } else false
     } catch (e: Exception) {
         Log.e("AuroraPicker", "applyLockScreenFromVideo failed", e)
