@@ -501,7 +501,8 @@ fun WallpaperPickerScreen(
                                 connection.instanceFollowRedirects = true
                                 connection.connectTimeout = 15000
                                 connection.readTimeout = 20000
-                                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
+                                connection.setRequestProperty("Referer", "https://www.instagram.com/")
                                 connection.setRequestProperty("Accept", "video/*,image/*,*/*;q=0.8")
                                 connection.connect()
 
@@ -511,7 +512,8 @@ fun WallpaperPickerScreen(
                                     if (!loc.isNullOrBlank()) {
                                         downloadUrl = loc
                                         connection = URL(downloadUrl).openConnection() as HttpURLConnection
-                                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+                                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
+                                        connection.setRequestProperty("Referer", "https://www.instagram.com/")
                                         connection.connect()
                                         code = connection.responseCode
                                     }
@@ -989,9 +991,10 @@ fun promoteStagingToActive(context: Context, stagingPath: String, type: String):
     return activeFile.absolutePath
 }
 
-suspend fun trimVideoTo15s(context: Context, inputPath: String): String = withContext(Dispatchers.IO) {
+suspend fun trimVideoTo15s(context: Context, inputPath: String): String? = withContext(Dispatchers.IO) {
     var extractor: MediaExtractor? = null
     var muxer: MediaMuxer? = null
+    var trimmedFile: File? = null
     try {
         val retriever = MediaMetadataRetriever()
         retriever.setDataSource(inputPath)
@@ -1003,7 +1006,7 @@ suspend fun trimVideoTo15s(context: Context, inputPath: String): String = withCo
             return@withContext inputPath
         }
 
-        val trimmedFile = File(context.filesDir, "trimmed_lock_${System.currentTimeMillis()}.mp4")
+        trimmedFile = File(context.filesDir, "trimmed_lock_${System.currentTimeMillis()}.mp4")
         extractor = MediaExtractor()
         extractor.setDataSource(inputPath)
 
@@ -1069,10 +1072,11 @@ suspend fun trimVideoTo15s(context: Context, inputPath: String): String = withCo
         trimmedFile.setReadable(true, false)
         trimmedFile.absolutePath
     } catch (e: Exception) {
-        Log.e("AuroraPicker", "Video trim failed, using original file", e)
+        Log.e("AuroraPicker", "Video trim failed, deleting partial file", e)
         muxer?.release()
         extractor?.release()
-        inputPath
+        trimmedFile?.delete()
+        null
     }
 }
 

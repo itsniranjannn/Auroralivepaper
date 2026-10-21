@@ -1,8 +1,11 @@
 package com.niranjan.auroralivepaper
 
+import android.Manifest
 import android.app.AlertDialog
 import android.app.WallpaperManager
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,6 +14,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -21,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.util.UnstableApi
@@ -57,7 +62,21 @@ import java.io.File
 class MainActivity : ComponentActivity() {
 
     private var checkedPickerReturn = false
+    private var pendingLockStillFallback = false
+    private var pendingLockPath: String? = null
+    private var pendingLockExportAction: (() -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val requestStoragePermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            pendingLockExportAction?.invoke()
+        } else {
+            Toast.makeText(this, "Storage permission required to export video for lock screen", Toast.LENGTH_SHORT).show()
+        }
+        pendingLockExportAction = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -204,37 +223,44 @@ class MainActivity : ComponentActivity() {
                                         val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK)
                                         Toast.makeText(this@MainActivity, if (ok) "Lock wallpaper set!" else "Failed", Toast.LENGTH_SHORT).show()
                                     } else if (type == "gif") {
-                                        if (isSamsungVideoLockAvailable(this@MainActivity)) {
-                                            lifecycleScope.launch {
-                                                Toast.makeText(this@MainActivity, "Preparing GIF for Lock screen...", Toast.LENGTH_SHORT).show()
-                                                val contentUri = exportVideoToMediaStore(this@MainActivity, activePath)
-                                                if (contentUri != null) {
-                                                    launchSamsungVideoLockEditor(this@MainActivity, contentUri)
-                                                } else {
-                                                    applyLockScreenFromGif(this@MainActivity, activePath)
-                                                    Toast.makeText(this@MainActivity, "Lock screen set to a still image.", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        } else {
-                                            val ok = applyLockScreenFromGif(this@MainActivity, activePath)
-                                            Toast.makeText(this@MainActivity, if (ok) "Lock screen set to a still image." else "Failed", Toast.LENGTH_SHORT).show()
-                                        }
+                                        val ok = applyLockScreenFromGif(this@MainActivity, activePath)
+                                        Toast.makeText(this@MainActivity, if (ok) "GIFs can't play on the lock screen. Use Set as Both for live." else "Failed", Toast.LENGTH_SHORT).show()
                                     } else {
                                         if (isSamsungVideoLockAvailable(this@MainActivity)) {
-                                            lifecycleScope.launch {
-                                                Toast.makeText(this@MainActivity, "Preparing video for Lock screen...", Toast.LENGTH_SHORT).show()
-                                                val trimmedPath = trimVideoTo15s(this@MainActivity, activePath)
-                                                val contentUri = exportVideoToMediaStore(this@MainActivity, trimmedPath)
-                                                if (contentUri != null) {
-                                                    val launched = launchSamsungVideoLockEditor(this@MainActivity, contentUri)
-                                                    if (!launched) {
-                                                        applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
-                                                        Toast.makeText(this@MainActivity, "Lock screen set to a still image.", Toast.LENGTH_SHORT).show()
+                                            val performLockExport = {
+                                                lifecycleScope.launch {
+                                                    Toast.makeText(this@MainActivity, "Preparing video for Lock screen...", Toast.LENGTH_SHORT).show()
+                                                    var trimmedPath: String? = null
+                                                    try {
+                                                        trimmedPath = trimVideoTo15s(this@MainActivity, activePath)
+                                                    } catch (e: Exception) {
+                                                        Log.e("MainActivity", "Video trimming failed", e)
                                                     }
-                                                } else {
-                                                    applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
-                                                    Toast.makeText(this@MainActivity, "Lock screen set to a still image.", Toast.LENGTH_SHORT).show()
+
+                                                    if (trimmedPath.isNullOrBlank()) {
+                                                        Toast.makeText(this@MainActivity, "Could not trim the video", Toast.LENGTH_SHORT).show()
+                                                        return@launch
+                                                    }
+
+                                                    val contentUri = exportVideoToMediaStore(this@MainActivity, trimmedPath)
+                                                    if (contentUri != null) {
+                                                        val launched = launchSamsungVideoLockEditor(this@MainActivity, contentUri)
+                                                        if (!launched) {
+                                                            Toast.makeText(this@MainActivity, "Could not launch video lock editor", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    } else {
+                                                        Toast.makeText(this@MainActivity, "Could not export video to MediaStore", Toast.LENGTH_SHORT).show()
+                                                    }
                                                 }
+                                            }
+
+                                            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+                                            ) {
+                                                pendingLockExportAction = { performLockExport() }
+                                                requestStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                            } else {
+                                                performLockExport()
                                             }
                                         } else {
                                             AlertDialog.Builder(this@MainActivity)
@@ -243,23 +269,9 @@ class MainActivity : ComponentActivity() {
                                                 .setPositiveButton("Continue") { _, _ ->
                                                     saveWallpaperMediaPath(this@MainActivity, activePath, type)
                                                     checkedPickerReturn = true
+                                                    pendingLockStillFallback = true
+                                                    pendingLockPath = activePath
                                                     launchLiveWallpaperPicker(this@MainActivity)
-                                                    mainHandler.postDelayed({
-                                                        try {
-                                                            val wm = WallpaperManager.getInstance(this@MainActivity)
-                                                            val info = wm.wallpaperInfo
-                                                            val isOurServiceActive = info != null &&
-                                                                    info.packageName == packageName &&
-                                                                    info.serviceName == AuroraWallpaperService::class.java.name
-
-                                                            if (!isOurServiceActive) {
-                                                                val ok = applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
-                                                                Toast.makeText(this@MainActivity, if (ok) "Lock screen set to a still image." else "Failed", Toast.LENGTH_SHORT).show()
-                                                            }
-                                                        } catch (e: Exception) {
-                                                            Log.e("MainActivity", "Lock fallback error", e)
-                                                        }
-                                                    }, 2500)
                                                 }
                                                 .setNegativeButton("Cancel", null)
                                                 .show()
@@ -314,7 +326,35 @@ class MainActivity : ComponentActivity() {
 
                     Log.d("MainActivity", "Check 1 (1500ms): isOurServiceActive=$isOurServiceActive1, activeComponent=${info?.component}")
 
-                    if (!isOurServiceActive1) {
+                    if (pendingLockStillFallback) {
+                        pendingLockStillFallback = false
+                        val fallbackPath = pendingLockPath
+                        pendingLockPath = null
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            val lockInfo = try { wm.getWallpaperInfo(WallpaperManager.FLAG_LOCK) } catch (e: Exception) { null }
+                            val isOurLockActive = lockInfo != null &&
+                                    lockInfo.packageName == packageName &&
+                                    lockInfo.serviceName == AuroraWallpaperService::class.java.name
+
+                            if (!isOurLockActive && fallbackPath != null) {
+                                val ok = applyLockScreenFromVideo(this, fallbackPath, 1f)
+                                Toast.makeText(this, if (ok) "Lock screen set to a still image." else "Failed to set lock screen", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            if (!isOurServiceActive1 && fallbackPath != null) {
+                                AlertDialog.Builder(this)
+                                    .setTitle("Lock Screen Wallpaper")
+                                    .setMessage("Apply a still image to the lock screen instead?")
+                                    .setPositiveButton("Yes") { _, _ ->
+                                        val ok = applyLockScreenFromVideo(this, fallbackPath, 1f)
+                                        Toast.makeText(this, if (ok) "Lock screen set to a still image." else "Failed to set lock screen", Toast.LENGTH_SHORT).show()
+                                    }
+                                    .setNegativeButton("No", null)
+                                    .show()
+                            }
+                        }
+                    } else if (!isOurServiceActive1) {
                         // Check 2: re-check at 3000 ms
                         mainHandler.postDelayed({
                             try {
