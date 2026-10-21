@@ -8,6 +8,23 @@
         android:name="android.software.live_wallpaper"
         android:required="false" />
 
+    <queries>
+        <package android:name="com.samsung.android.app.dressroom" />
+        <package android:name="com.sec.android.gallery3d" />
+        <intent>
+            <action android:name="android.service.wallpaper.WallpaperService" />
+        </intent>
+        <intent>
+            <action android:name="android.service.wallpaper.CHANGE_LIVE_WALLPAPER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_WALLPAPER" />
+        </intent>
+        <intent>
+            <action android:name="com.samsung.intent.action.SHOW_VIDEO_WALLPAPER_EDITOR" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -44,6 +61,16 @@
                 android:name="android.service.wallpaper"
                 android:resource="@xml/wallpaper" />
         </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

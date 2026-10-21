@@ -148,15 +148,7 @@ fun PreviewScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Button(
-                    onClick = {
-                        if (mediaType == "video" || mediaType == "gif") {
-                            guidanceMessage = "Choose 'Home screen and lock screen' on the next screen."
-                            pendingAction = onSetLock
-                            showGuidanceDialog = true
-                        } else {
-                            onSetLock()
-                        }
-                    },
+                    onClick = onSetLock,
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF6C5CE7),

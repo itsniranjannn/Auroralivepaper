@@ -8,6 +8,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -849,6 +850,20 @@ private fun UrlUploadDialog(
     )
 }
 
+fun isSamsungVideoLockAvailable(context: Context): Boolean {
+    return try {
+        val intent = Intent(Intent.ACTION_SET_WALLPAPER).apply {
+            setDataAndType(Uri.parse("content://media/external/video/media/1"), "video/mp4")
+            setComponent(ComponentName("com.samsung.android.app.dressroom", "com.samsung.android.app.dressroom.presentation.SetAsWallPaperActivity"))
+        }
+        val pm = context.packageManager
+        val resolveInfo = pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        resolveInfo != null
+    } catch (e: Exception) {
+        false
+    }
+}
+
 fun applyImageWallpaper(context: Context, imagePath: String, flags: Int): Boolean {
     return try {
         val bitmap = BitmapFactory.decodeFile(imagePath)
@@ -972,6 +987,172 @@ fun promoteStagingToActive(context: Context, stagingPath: String, type: String):
     addRecentWallpaper(context, recentFile.absolutePath, type)
 
     return activeFile.absolutePath
+}
+
+suspend fun trimVideoTo15s(context: Context, inputPath: String): String = withContext(Dispatchers.IO) {
+    var extractor: MediaExtractor? = null
+    var muxer: MediaMuxer? = null
+    try {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(inputPath)
+        val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 10000L
+        val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+        retriever.release()
+
+        if (durationMs <= 15000L) {
+            return@withContext inputPath
+        }
+
+        val trimmedFile = File(context.filesDir, "trimmed_lock_${System.currentTimeMillis()}.mp4")
+        extractor = MediaExtractor()
+        extractor.setDataSource(inputPath)
+
+        val trackCount = extractor.trackCount
+        muxer = MediaMuxer(trimmedFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+        muxer.setOrientationHint(rotation)
+
+        val indexMap = HashMap<Int, Int>()
+        var maxInputSize = 1024 * 1024
+
+        for (i in 0 until trackCount) {
+            val format = extractor.getTrackFormat(i)
+            val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+            if (mime.startsWith("video/") || mime.startsWith("audio/")) {
+                extractor.selectTrack(i)
+                val newIndex = muxer.addTrack(format)
+                indexMap[i] = newIndex
+                if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                    val size = format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+                    if (size > maxInputSize) maxInputSize = size
+                }
+            }
+        }
+
+        muxer.start()
+
+        val buffer = ByteBuffer.allocate(maxInputSize)
+        val bufferInfo = MediaCodec.BufferInfo()
+
+        extractor.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+
+        while (true) {
+            val trackIndex = extractor.sampleTrackIndex
+            if (trackIndex < 0) break
+
+            val sampleTime = extractor.sampleTime
+            if (sampleTime > 15_000_000L) break
+
+            bufferInfo.offset = 0
+            bufferInfo.size = extractor.readSampleData(buffer, 0)
+            bufferInfo.presentationTimeUs = sampleTime
+            val sampleFlags = extractor.sampleFlags
+            var codecFlags = 0
+            if ((sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+                codecFlags = codecFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+            }
+            bufferInfo.flags = codecFlags
+
+            val muxerTrackIndex = indexMap[trackIndex]
+            if (muxerTrackIndex != null) {
+                muxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
+            }
+
+            extractor.advance()
+        }
+
+        muxer.stop()
+        muxer.release()
+        muxer = null
+        extractor.release()
+        extractor = null
+
+        trimmedFile.setReadable(true, false)
+        trimmedFile.absolutePath
+    } catch (e: Exception) {
+        Log.e("AuroraPicker", "Video trim failed, using original file", e)
+        muxer?.release()
+        extractor?.release()
+        inputPath
+    }
+}
+
+fun exportVideoToMediaStore(context: Context, videoPath: String): Uri? {
+    return try {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, "Aurora_lock_${System.currentTimeMillis()}.mp4")
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Aurora")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+        }
+
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        resolver.openOutputStream(uri)?.use { out ->
+            FileInputStream(videoPath).use { input ->
+                input.copyTo(out)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(MediaStore.Video.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
+
+        uri
+    } catch (e: Exception) {
+        Log.e("AuroraPicker", "Failed to export video to MediaStore", e)
+        null
+    }
+}
+
+fun launchSamsungVideoLockEditor(context: Context, contentUri: Uri): Boolean {
+    // Launch Order:
+    // (a) Intent(Intent.ACTION_SET_WALLPAPER) with SetAsWallPaperActivity
+    try {
+        val intentA = Intent(Intent.ACTION_SET_WALLPAPER).apply {
+            setDataAndType(contentUri, "video/mp4")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            setComponent(ComponentName("com.samsung.android.app.dressroom", "com.samsung.android.app.dressroom.presentation.SetAsWallPaperActivity"))
+        }
+        context.startActivity(intentA)
+        Log.d("AuroraPicker", "Successfully launched (a) SetAsWallPaperActivity")
+        return true
+    } catch (eA: Exception) {
+        Log.w("AuroraPicker", "Launch (a) SetAsWallPaperActivity failed, trying (b) SHOW_VIDEO_WALLPAPER_EDITOR", eA)
+    }
+
+    // (b) Intent("com.samsung.intent.action.SHOW_VIDEO_WALLPAPER_EDITOR") with EditMainActivity
+    try {
+        val intentB = Intent("com.samsung.intent.action.SHOW_VIDEO_WALLPAPER_EDITOR").apply {
+            setDataAndType(contentUri, "video/*")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            setComponent(ComponentName("com.samsung.android.app.dressroom", "com.samsung.android.app.dressroom.presentation.preview.EditMainActivity"))
+        }
+        context.startActivity(intentB)
+        Log.d("AuroraPicker", "Successfully launched (b) EditMainActivity")
+        return true
+    } catch (eB: Exception) {
+        Log.w("AuroraPicker", "Launch (b) EditMainActivity failed, trying (c) Gallery fallback", eB)
+    }
+
+    // (c) Gallery with instruction dialog
+    try {
+        val intentC = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(contentUri, "video/*")
+            setPackage("com.sec.android.gallery3d")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intentC)
+        Toast.makeText(context, "In Gallery tap the three dots > Set as wallpaper > Lock screen.", Toast.LENGTH_LONG).show()
+        Log.d("AuroraPicker", "Successfully launched (c) Gallery")
+        return true
+    } catch (eC: Exception) {
+        Log.e("AuroraPicker", "All Samsung video lock launches failed", eC)
+        return false
+    }
 }
 
 fun cleanupOldActiveWallpapers(context: Context, currentFileName: String) {
