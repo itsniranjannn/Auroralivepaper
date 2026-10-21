@@ -19,12 +19,12 @@ import java.net.URL
 import kotlin.coroutines.resume
 
 /**
- * High-performance extractor for Instagram Reels/Posts and direct video links.
- * Uses headless native WebView loading the Instagram Reel and Embed endpoints on Main thread.
+ * Ultra-fast extractor for Instagram Reels/Posts and direct video links.
+ * Bypasses login redirects by directly querying the public Instagram Embed endpoint.
  */
 object WebVideoExtractor {
 
-    private const val TIMEOUT_MS = 15000L
+    private const val TIMEOUT_MS = 10000L
 
     fun extractInstagramCode(url: String): String? {
         val regex = Regex("""instagram\.com/(?:reel|reels|p|tv)/([A-Za-z0-9_-]+)""", RegexOption.IGNORE_CASE)
@@ -41,7 +41,7 @@ object WebVideoExtractor {
             return trimmed
         }
 
-        // Attempt 1: Fast HTML Embed Scraping
+        // Step 1: Direct HTML Embed Scrape (0.5s - 1s)
         val fastScraped = withContext(Dispatchers.IO) {
             tryScrapeInstagramEmbed(instaCode)
         }
@@ -50,17 +50,7 @@ object WebVideoExtractor {
             return fastScraped
         }
 
-        // Attempt 2: Direct Reel URL in Headless WebView
-        val reelUrl = "https://www.instagram.com/reel/$instaCode/"
-        val reelResult = withContext(Dispatchers.Main) {
-            extractFromHeadlessWebView(context, reelUrl)
-        }
-        if (!reelResult.isNullOrBlank()) {
-            Log.d("WebVideoExtractor", "Headless WebView Reel extraction succeeded: $reelResult")
-            return reelResult
-        }
-
-        // Attempt 3: Embed Endpoint in Headless WebView
+        // Step 2: Headless WebView directly on Embed URL (1.5s - 4s)
         val embedUrl = "https://www.instagram.com/p/$instaCode/embed/captioned/"
         val embedResult = withContext(Dispatchers.Main) {
             extractFromHeadlessWebView(context, embedUrl)
@@ -78,11 +68,11 @@ object WebVideoExtractor {
             val url = URL("https://www.instagram.com/p/$code/embed/captioned/")
             val conn = url.openConnection() as HttpURLConnection
             conn.instanceFollowRedirects = true
-            conn.connectTimeout = 6000
-            conn.readTimeout = 6000
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
             conn.setRequestProperty(
                 "User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
             )
             conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
@@ -189,7 +179,7 @@ object WebVideoExtractor {
                                     return@evaluateJavascript
                                 }
                             }
-                            if (attempts < 20 && !isFinished) {
+                            if (attempts < 15 && !isFinished) {
                                 mainHandler.postDelayed(this, 500)
                             }
                         }
@@ -197,6 +187,14 @@ object WebVideoExtractor {
                 }
 
                 wv.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        val reqUrl = request?.url?.toString() ?: ""
+                        if (reqUrl.contains("accounts/login") || reqUrl.contains("login/")) {
+                            return true // Block login redirect
+                        }
+                        return false
+                    }
+
                     override fun shouldInterceptRequest(
                         view: WebView?,
                         request: WebResourceRequest?
