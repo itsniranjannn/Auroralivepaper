@@ -3,6 +3,10 @@ package com.niranjan.auroralivepaper
 import android.app.WallpaperManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -40,9 +44,14 @@ import com.niranjan.auroralivepaper.ui.settings.BatterySettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.StorageSettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.ExperienceSettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.AboutScreen
+import java.io.File
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
+
+    private var checkedPickerReturn = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -150,54 +159,109 @@ class MainActivity : ComponentActivity() {
                             onSetHome = {
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                    val activeFile = File(activePath)
+                                    if (!activeFile.exists() || !activeFile.canRead()) {
+                                        Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
+                                        return@let
+                                    }
                                     if (type == "image") {
-                                        applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM)
+                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM)
+                                        Toast.makeText(this@MainActivity, if (ok) "Home wallpaper set!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
                                     } else {
                                         saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                        checkedPickerReturn = true
                                         launchLiveWallpaperPicker(this@MainActivity)
                                     }
                                 }
-                                navController.popBackStack()
+                                navController.popBackStack("home", false)
                             },
                             onSetLock = {
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                    val activeFile = File(activePath)
+                                    if (!activeFile.exists() || !activeFile.canRead()) {
+                                        Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
+                                        return@let
+                                    }
                                     if (type == "image") {
-                                        applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK)
+                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK)
+                                        Toast.makeText(this@MainActivity, if (ok) "Lock wallpaper set!" else "Failed", Toast.LENGTH_SHORT).show()
                                     } else if (type == "gif") {
-                                        applyLockScreenFromGif(this@MainActivity, activePath)
+                                        val ok = applyLockScreenFromGif(this@MainActivity, activePath)
+                                        Toast.makeText(this@MainActivity, if (ok) "Lock screen updated" else "Failed", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
+                                        val ok = applyLockScreenFromVideo(this@MainActivity, activePath, 1f)
+                                        Log.d("MainActivity", "applyLockScreenFromVideo result=$ok")
+                                        Toast.makeText(this@MainActivity, if (ok) "Lock screen updated" else "Failed", Toast.LENGTH_SHORT).show()
                                     }
                                 }
-                                navController.popBackStack()
+                                navController.popBackStack("home", false)
                             },
                             onSetBoth = {
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                    val activeFile = File(activePath)
+                                    if (!activeFile.exists() || !activeFile.canRead()) {
+                                        Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
+                                        return@let
+                                    }
                                     if (type == "image") {
-                                        applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                                        Toast.makeText(this@MainActivity, if (ok) "Wallpaper applied to Both!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        try {
-                                            // Clearing FLAG_LOCK allows the live wallpaper to show and animate on BOTH home and lock screens seamlessly!
-                                            WallpaperManager.getInstance(this@MainActivity).clear(WallpaperManager.FLAG_LOCK)
-                                        } catch (e: Exception) {
-                                            android.util.Log.w("MainActivity", "Could not clear FLAG_LOCK", e)
-                                        }
                                         saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                        checkedPickerReturn = true
                                         launchLiveWallpaperPicker(this@MainActivity)
                                     }
                                 }
-                                navController.popBackStack()
+                                navController.popBackStack("home", false)
                             },
                             onDismiss = {
                                 cleanupStagingFiles(this@MainActivity)
-                                navController.popBackStack()
+                                navController.popBackStack("home", false)
                             }
                         )
                     }
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (checkedPickerReturn) {
+            checkedPickerReturn = false
+
+            // Check 1: at 1500 ms
+            mainHandler.postDelayed({
+                try {
+                    val wm = WallpaperManager.getInstance(this)
+                    val info = wm.wallpaperInfo
+                    val isOurServiceActive1 = info != null &&
+                            info.packageName == packageName &&
+                            info.serviceName == AuroraWallpaperService::class.java.name
+
+                    Log.d("MainActivity", "Check 1 (1500ms): isOurServiceActive=$isOurServiceActive1, activeComponent=${info?.component}")
+
+                    if (!isOurServiceActive1) {
+                        // Check 2: re-check at 3000 ms
+                        mainHandler.postDelayed({
+                            try {
+                                val info2 = wm.wallpaperInfo
+                                val isOurServiceActive2 = info2 != null &&
+                                        info2.packageName == packageName &&
+                                        info2.serviceName == AuroraWallpaperService::class.java.name
+
+                                Log.d("MainActivity", "Check 2 (3000ms): isOurServiceActive=$isOurServiceActive2, activeComponent=${info2?.component}")
+                            } catch (e2: Exception) {
+                                Log.e("MainActivity", "Error in Check 2", e2)
+                            }
+                        }, 1500)
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Error in Check 1", e)
+                }
+            }, 1500)
         }
     }
 }

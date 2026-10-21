@@ -30,7 +30,7 @@ object SettingsPrefs {
     // ---------- Battery & Performance ----------
 
     fun pauseOnBatterySaver(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_PAUSE_ON_BATTERY_SAVER, true)
+        prefs(context).getBoolean(KEY_PAUSE_ON_BATTERY_SAVER, false)
 
     fun setPauseOnBatterySaver(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_PAUSE_ON_BATTERY_SAVER, value).apply()

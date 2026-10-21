@@ -30,7 +30,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.niranjan.auroralivepaper.ui.components.AuroraGradientButton
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import java.io.File
 
@@ -46,6 +45,10 @@ fun PreviewScreen(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    var showGuidanceDialog by remember { mutableStateOf(false) }
+    var guidanceMessage by remember { mutableStateOf("") }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val loadedBitmap = remember(mediaPath, imageBitmap) {
         imageBitmap ?: if (mediaPath != null && File(mediaPath).exists()) {
             BitmapFactory.decodeFile(mediaPath)
@@ -121,7 +124,15 @@ fun PreviewScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Button(
-                    onClick = onSetHome,
+                    onClick = {
+                        if (mediaType == "video" || mediaType == "gif") {
+                            guidanceMessage = "Choose 'Home screen' on the next screen."
+                            pendingAction = onSetHome
+                            showGuidanceDialog = true
+                        } else {
+                            onSetHome()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF00B894),
@@ -133,9 +144,19 @@ fun PreviewScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text("Set as Home Screen", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
+
                 Spacer(modifier = Modifier.height(10.dp))
+
                 Button(
-                    onClick = onSetLock,
+                    onClick = {
+                        if (mediaType == "video" || mediaType == "gif") {
+                            guidanceMessage = "Choose 'Home screen and lock screen' on the next screen."
+                            pendingAction = onSetLock
+                            showGuidanceDialog = true
+                        } else {
+                            onSetLock()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF6C5CE7),
@@ -147,9 +168,19 @@ fun PreviewScreen(
                     Spacer(modifier = Modifier.width(10.dp))
                     Text("Set as Lock Screen", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
+
                 Spacer(modifier = Modifier.height(10.dp))
+
                 Button(
-                    onClick = onSetBoth,
+                    onClick = {
+                        if (mediaType == "video" || mediaType == "gif") {
+                            guidanceMessage = "Choose 'Home screen and lock screen' on the next screen."
+                            pendingAction = onSetBoth
+                            showGuidanceDialog = true
+                        } else {
+                            onSetBoth()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF0984E3),
@@ -170,6 +201,37 @@ fun PreviewScreen(
                     Text("Cancel", color = Color.White.copy(alpha = 0.75f), fontFamily = ManropeFamily, fontSize = 14.sp)
                 }
             }
+        }
+
+        if (showGuidanceDialog) {
+            AlertDialog(
+                onDismissRequest = { showGuidanceDialog = false },
+                title = {
+                    Text("Setting Live Wallpaper", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
+                },
+                text = {
+                    Text(
+                        guidanceMessage,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontFamily = ManropeFamily,
+                        fontSize = 14.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showGuidanceDialog = false
+                            pendingAction?.invoke()
+                            pendingAction = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C5CE7))
+                    ) {
+                        Text("Continue to Set Wallpaper", fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
+                    }
+                },
+                containerColor = Color(0xFF141A29),
+                shape = RoundedCornerShape(20.dp)
+            )
         }
     }
 }
