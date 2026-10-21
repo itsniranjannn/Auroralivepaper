@@ -5,21 +5,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.ImageDecoder
 import android.graphics.LinearGradient
 import android.graphics.Movie
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.Shader
-import android.graphics.drawable.AnimatedImageDrawable
 import android.media.MediaPlayer
-import android.net.Uri
 import android.os.BatteryManager
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -34,18 +28,22 @@ import java.io.FileInputStream
 
 class AuroraWallpaperService : WallpaperService() {
 
-    override fun onCreateEngine(): Engine = AuroraEngine()
+    override fun onCreateEngine(): Engine {
+        Log.d("AuroraEngine", "Service.onCreateEngine called")
+        return AuroraEngine()
+    }
 
     inner class AuroraEngine : Engine() {
 
         private var mediaPlayer: MediaPlayer? = null
+        private var isPrepared = false
         private var gifMovie: Movie? = null
         private var gifStartTime: Long = 0
         private val gifHandler = Handler(Looper.getMainLooper())
         private var gifRunning = false
         private var currentHolder: SurfaceHolder? = null
 
-        private var isVisible = false
+        private var isVisibleState = false
         private var isPowerSave = false
         private var isBatteryLow = false
         private var receiverRegistered = false
@@ -58,96 +56,138 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
-            updatePlayerSettings()
-            refreshPowerState()
-            updatePlaybackState()
+            try {
+                updatePlayerSettings()
+                refreshPowerState()
+                updatePlaybackState()
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in settingsListener", e)
+            }
         }
 
         private val mediaListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == "media_version") {
-                currentHolder?.let { loadWallpaper(it) }
+            try {
+                if (key == "media_version") {
+                    currentHolder?.let { loadWallpaper(it) }
+                }
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in mediaListener", e)
             }
         }
 
         private val powerReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent == null) return
-                when (intent.action) {
-                    PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
-                        val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
-                        isPowerSave = pm?.isPowerSaveMode == true
+                try {
+                    if (intent == null) return
+                    when (intent.action) {
+                        PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
+                            val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
+                            isPowerSave = pm?.isPowerSaveMode == true
+                        }
+                        Intent.ACTION_BATTERY_CHANGED -> updateBatteryLow(intent)
                     }
-                    Intent.ACTION_BATTERY_CHANGED -> updateBatteryLow(intent)
+                    updatePlaybackState()
+                } catch (e: Exception) {
+                    Log.e("AuroraEngine", "Error in powerReceiver.onReceive", e)
                 }
-                updatePlaybackState()
             }
         }
 
         private val gifDrawRunnable = object : Runnable {
             override fun run() {
-                if (!gifRunning) return
-                drawGifFrame()
-                if (gifRunning) gifHandler.postDelayed(this, 33) // ~30fps
+                try {
+                    if (!gifRunning) return
+                    drawGifFrame()
+                    if (gifRunning) gifHandler.postDelayed(this, 33) // ~30fps
+                } catch (e: Exception) {
+                    Log.e("AuroraEngine", "Error in gifDrawRunnable", e)
+                }
             }
         }
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
-            super.onCreate(surfaceHolder)
-            settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
-            mediaPrefs.registerOnSharedPreferenceChangeListener(mediaListener)
+            try {
+                super.onCreate(surfaceHolder)
+                Log.d("AuroraEngine", "Engine.onCreate: isPreview=$isPreview")
+                settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
+                mediaPrefs.registerOnSharedPreferenceChangeListener(mediaListener)
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in Engine.onCreate", e)
+            }
         }
 
         override fun onDestroy() {
-            super.onDestroy()
-            unregisterPowerReceiver()
-            settingsPrefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
-            mediaPrefs.unregisterOnSharedPreferenceChangeListener(mediaListener)
-            releasePlayer()
+            try {
+                super.onDestroy()
+                Log.d("AuroraEngine", "Engine.onDestroy: isPreview=$isPreview")
+                unregisterPowerReceiver()
+                settingsPrefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
+                mediaPrefs.unregisterOnSharedPreferenceChangeListener(mediaListener)
+                releasePlayer()
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in Engine.onDestroy", e)
+            }
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
-            super.onSurfaceCreated(holder)
-            Log.d("AuroraEngine", "onSurfaceCreated: isValid=${holder.surface.isValid}, isPreview=$isPreview")
-            currentHolder = holder
-            loadWallpaper(holder)
+            try {
+                super.onSurfaceCreated(holder)
+                Log.d("AuroraEngine", "onSurfaceCreated: surfaceValid=${holder.surface.isValid}, isPreview=$isPreview")
+                currentHolder = holder
+                loadWallpaper(holder)
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in onSurfaceCreated", e)
+            }
         }
 
         override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-            super.onSurfaceChanged(holder, format, width, height)
-            Log.d("AuroraEngine", "onSurfaceChanged: ${width}x${height}, isPreview=$isPreview")
-            currentHolder = holder
             try {
-                if (holder.surface.isValid) {
-                    mediaPlayer?.setSurface(holder.surface)
+                super.onSurfaceChanged(holder, format, width, height)
+                Log.d("AuroraEngine", "onSurfaceChanged: ${width}x${height}, isPreview=$isPreview")
+                currentHolder = holder
+                if (holder.surface.isValid && mediaPlayer != null) {
+                    try {
+                        mediaPlayer?.setSurface(holder.surface)
+                    } catch (e: Exception) {
+                        Log.e("AuroraEngine", "Error setting surface in onSurfaceChanged", e)
+                    }
                 }
             } catch (e: Exception) {
-                Log.w("AuroraEngine", "Error setting surface onSurfaceChanged", e)
+                Log.e("AuroraEngine", "Error in onSurfaceChanged", e)
             }
         }
 
         override fun onVisibilityChanged(visible: Boolean) {
-            super.onVisibilityChanged(visible)
-            Log.d("AuroraEngine", "onVisibilityChanged: visible=$visible, isPreview=$isPreview")
-            isVisible = visible
-            if (visible) {
-                registerPowerReceiver()
-                refreshPowerState()
-                currentHolder?.let { holder ->
-                    if (holder.surface.isValid && mediaPlayer == null && gifMovie == null) {
-                        loadWallpaper(holder)
+            try {
+                super.onVisibilityChanged(visible)
+                Log.d("AuroraEngine", "onVisibilityChanged: visible=$visible, isPreview=$isPreview")
+                isVisibleState = visible
+                if (visible) {
+                    registerPowerReceiver()
+                    refreshPowerState()
+                    currentHolder?.let { holder ->
+                        if (holder.surface.isValid && mediaPlayer == null && gifMovie == null) {
+                            loadWallpaper(holder)
+                        }
                     }
+                } else {
+                    unregisterPowerReceiver()
                 }
-            } else {
-                unregisterPowerReceiver()
+                updatePlaybackState()
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in onVisibilityChanged", e)
             }
-            updatePlaybackState()
         }
 
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
-            super.onSurfaceDestroyed(holder)
-            Log.d("AuroraEngine", "onSurfaceDestroyed, isPreview=$isPreview")
-            currentHolder = null
-            releasePlayer()
+            try {
+                super.onSurfaceDestroyed(holder)
+                Log.d("AuroraEngine", "onSurfaceDestroyed: isPreview=$isPreview")
+                currentHolder = null
+                releasePlayer()
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in onSurfaceDestroyed", e)
+            }
         }
 
         private fun registerPowerReceiver() {
@@ -173,9 +213,9 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private fun refreshPowerState() {
-            val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
-            isPowerSave = pm?.isPowerSaveMode == true
             try {
+                val pm = applicationContext.getSystemService(POWER_SERVICE) as? PowerManager
+                isPowerSave = pm?.isPowerSaveMode == true
                 val sticky = applicationContext.registerReceiver(
                     null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)
                 )
@@ -187,89 +227,111 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private fun updateBatteryLow(intent: Intent) {
-            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-            val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                    status == BatteryManager.BATTERY_STATUS_FULL
-            if (level >= 0 && scale > 0) {
-                val pct = (level * 100) / scale
-                val threshold = SettingsPrefs.batteryThreshold(applicationContext)
-                val pauseBelow = SettingsPrefs.pauseBelowThreshold(applicationContext)
-                isBatteryLow = pauseBelow && !charging && pct <= threshold
-            } else {
-                isBatteryLow = false
+            try {
+                val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                        status == BatteryManager.BATTERY_STATUS_FULL
+                if (level >= 0 && scale > 0) {
+                    val pct = (level * 100) / scale
+                    val threshold = SettingsPrefs.batteryThreshold(applicationContext)
+                    val pauseBelow = SettingsPrefs.pauseBelowThreshold(applicationContext)
+                    isBatteryLow = pauseBelow && !charging && pct <= threshold
+                } else {
+                    isBatteryLow = false
+                }
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in updateBatteryLow", e)
             }
         }
 
         private fun updatePlayerSettings() {
             mediaPlayer?.let { mp ->
                 try {
-                    val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
-                    val vol = SettingsPrefs.wallpaperVolume(applicationContext)
-                    val actualVol = if (playSound) vol else 0f
-                    mp.setVolume(actualVol, actualVol)
-                    val loop = SettingsPrefs.loopAutomatically(applicationContext)
-                    mp.isLooping = loop
+                    if (isPrepared) {
+                        val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
+                        val vol = SettingsPrefs.wallpaperVolume(applicationContext)
+                        val actualVol = if (playSound) vol else 0f
+                        mp.setVolume(actualVol, actualVol)
+                        val loop = SettingsPrefs.loopAutomatically(applicationContext)
+                        mp.isLooping = loop
+                    }
                 } catch (e: Exception) {
-                    Log.w("AuroraEngine", "Failed to update player settings", e)
+                    Log.e("AuroraEngine", "Failed to update player settings", e)
                 }
             }
         }
 
         private fun shouldPause(): Boolean {
-            // When in system preview mode (Set wallpaper picker), ALWAYS play regardless of visibility quirks
             if (isPreview) return false
-            if (!isVisible) return true
-            if (SettingsPrefs.pauseOnBatterySaver(applicationContext) && isPowerSave) return true
+            if (!isVisibleState) return true
             if (isBatteryLow) return true
             return false
         }
 
         private fun updatePlaybackState() {
-            val pause = shouldPause()
-            Log.d("AuroraEngine", "updatePlaybackState: shouldPause=$pause (isVisible=$isVisible, isPreview=$isPreview)")
-            if (pause) {
-                try {
-                    if (mediaPlayer?.isPlaying == true) {
-                        mediaPlayer?.pause()
+            try {
+                val pause = shouldPause()
+                Log.d("AuroraEngine", "updatePlaybackState: pause=$pause, isVisible=$isVisibleState, isPreview=$isPreview, isPrepared=$isPrepared")
+                if (pause) {
+                    if (isPrepared && mediaPlayer != null) {
+                        try {
+                            if (mediaPlayer?.isPlaying == true) {
+                                mediaPlayer?.pause()
+                            }
+                        } catch (e: Exception) {
+                            Log.w("AuroraEngine", "Error pausing MediaPlayer", e)
+                        }
                     }
-                } catch (e: Exception) {
-                    Log.w("AuroraEngine", "Error pausing MediaPlayer", e)
-                }
-                gifRunning = false
-                gifHandler.removeCallbacks(gifDrawRunnable)
-            } else {
-                try {
-                    if (mediaPlayer != null && mediaPlayer?.isPlaying == false) {
-                        mediaPlayer?.start()
+                    gifRunning = false
+                    gifHandler.removeCallbacks(gifDrawRunnable)
+                } else {
+                    if (isPrepared && mediaPlayer != null) {
+                        try {
+                            if (mediaPlayer?.isPlaying == false) {
+                                mediaPlayer?.start()
+                            }
+                        } catch (e: Exception) {
+                            Log.w("AuroraEngine", "Error starting MediaPlayer", e)
+                        }
                     }
-                } catch (e: Exception) {
-                    Log.w("AuroraEngine", "Error starting MediaPlayer", e)
+                    if (gifMovie != null && !gifRunning) {
+                        gifRunning = true
+                        gifHandler.post(gifDrawRunnable)
+                    }
                 }
-                if (gifMovie != null && !gifRunning) {
-                    gifRunning = true
-                    gifHandler.post(gifDrawRunnable)
-                }
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in updatePlaybackState", e)
             }
         }
 
         private fun loadWallpaper(holder: SurfaceHolder) {
-            val savedPath = mediaPrefs.getString("media_path", null)
-            val mediaType = mediaPrefs.getString("media_type", "video")
-            Log.d("AuroraEngine", "loadWallpaper: path=$savedPath, type=$mediaType, isPreview=$isPreview")
+            try {
+                val savedPath = mediaPrefs.getString("media_path", null)
+                val mediaType = mediaPrefs.getString("media_type", "video")
+                val fileExists = savedPath != null && File(savedPath).exists()
+                val fileSize = if (fileExists && savedPath != null) File(savedPath).length() else 0L
 
-            if (savedPath == null || !File(savedPath).exists()) {
-                releasePlayer()
-                drawAuroraFallbackTheme(holder)
-                return
-            }
+                Log.d(
+                    "AuroraEngine",
+                    "loadWallpaper: path=$savedPath, type=$mediaType, exists=$fileExists, size=$fileSize, isPreview=$isPreview"
+                )
 
-            if (mediaType == "gif") {
-                releasePlayer()
-                startGif(savedPath)
-            } else {
-                startVideo(savedPath, holder)
+                if (!fileExists || savedPath == null) {
+                    releasePlayer()
+                    drawAuroraFallbackTheme(holder)
+                    return
+                }
+
+                if (mediaType == "gif") {
+                    releasePlayer()
+                    startGif(savedPath)
+                } else {
+                    startVideo(savedPath, holder)
+                }
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Error in loadWallpaper", e)
             }
         }
 
@@ -281,7 +343,6 @@ class AuroraWallpaperService : WallpaperService() {
                     val w = canvas.width.toFloat()
                     val h = canvas.height.toFloat()
 
-                    // Background: Dark Cosmic Gradient
                     val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         shader = LinearGradient(
                             0f, 0f, 0f, h,
@@ -296,7 +357,6 @@ class AuroraWallpaperService : WallpaperService() {
                     }
                     canvas.drawRect(0f, 0f, w, h, bgPaint)
 
-                    // Aurora Wave 1
                     val wavePaint1 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         style = Paint.Style.STROKE
                         strokeWidth = 16f
@@ -318,27 +378,6 @@ class AuroraWallpaperService : WallpaperService() {
                     }
                     canvas.drawPath(path1, wavePaint1)
 
-                    // Aurora Wave 2
-                    val wavePaint2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        style = Paint.Style.STROKE
-                        strokeWidth = 10f
-                        strokeCap = Paint.Cap.ROUND
-                        shader = LinearGradient(
-                            0f, 0f, w, h,
-                            intArrayOf(
-                                Color.parseColor("#B38CFF"),
-                                Color.parseColor("#7CE7D7")
-                            ),
-                            null,
-                            Shader.TileMode.CLAMP
-                        )
-                    }
-                    val path2 = Path().apply {
-                        moveTo(w * 0.15f, h * 0.72f)
-                        cubicTo(w * 0.4f, h * 0.42f, w * 0.7f, h * 0.82f, w * 0.95f, h * 0.52f)
-                    }
-                    canvas.drawPath(path2, wavePaint2)
-
                     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = Color.WHITE
                         textSize = 48f
@@ -355,43 +394,48 @@ class AuroraWallpaperService : WallpaperService() {
                     canvas.drawText("Bring your screen to life", w / 2f, h * 0.85f + 40f, subTextPaint)
                 }
             } catch (e: Exception) {
-                Log.w("Aurora", "Failed to draw fallback theme canvas", e)
+                Log.e("AuroraEngine", "Failed to draw fallback theme canvas", e)
             } finally {
                 canvas?.let { holder.unlockCanvasAndPost(it) }
             }
         }
 
         private fun startVideo(filePath: String, holder: SurfaceHolder) {
-            val playSound = SettingsPrefs.playWallpaperSound(applicationContext)
-            val vol = SettingsPrefs.wallpaperVolume(applicationContext)
-            val loop = SettingsPrefs.loopAutomatically(applicationContext)
-
-            releasePlayer()
-
             try {
+                releasePlayer()
+                isPrepared = false
+
+                Log.d("AuroraEngine", "startVideo: preparing MediaPlayer for $filePath")
                 mediaPlayer = MediaPlayer().apply {
                     setSurface(holder.surface)
                     setDataSource(filePath)
-                    isLooping = loop
-                    val actualVol = if (playSound) vol else 0f
-                    setVolume(actualVol, actualVol)
                     setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
                     setOnPreparedListener { mp ->
-                        Log.d("AuroraEngine", "MediaPlayer prepared successfully, duration=${mp.duration}")
-                        mp.start()
+                        Log.d("AuroraEngine", "MediaPlayer prepared successfully: duration=${mp.duration}ms, isPreview=$isPreview")
+                        try {
+                            isPrepared = true
+                            updatePlayerSettings()
+                            updatePlaybackState()
+                        } catch (e: Exception) {
+                            Log.e("AuroraEngine", "Error handling onPrepared", e)
+                        }
                     }
                     setOnErrorListener { _, what, extra ->
-                        Log.e("AuroraEngine", "MediaPlayer error: what=$what extra=$extra")
+                        Log.e("AuroraEngine", "MediaPlayer onError: what=$what, extra=$extra")
+                        isPrepared = false
+                        releasePlayer()
+                        gifHandler.postDelayed({
+                            currentHolder?.let { loadWallpaper(it) }
+                        }, 500)
                         true
                     }
                     prepareAsync()
                 }
-            } catch (e: Exception) {
-                Log.e("AuroraEngine", "Failed to create/start MediaPlayer for $filePath", e)
-            }
 
-            refreshPowerState()
-            updatePlaybackState()
+                refreshPowerState()
+            } catch (e: Exception) {
+                Log.e("AuroraEngine", "Failed to startVideo for $filePath", e)
+            }
         }
 
         private fun startGif(path: String) {
@@ -404,7 +448,7 @@ class AuroraWallpaperService : WallpaperService() {
                     gifHandler.post(gifDrawRunnable)
                 }
             } catch (e: Exception) {
-                Log.w("Aurora", "Failed to decode GIF stream", e)
+                Log.e("AuroraEngine", "Failed to decode GIF stream for $path", e)
             }
         }
 
@@ -440,13 +484,14 @@ class AuroraWallpaperService : WallpaperService() {
                     canvas.restore()
                 }
             } catch (e: Exception) {
-                Log.w("Aurora", "Failed to draw GIF frame", e)
+                Log.e("AuroraEngine", "Failed to draw GIF frame", e)
             } finally {
                 canvas?.let { holder.unlockCanvasAndPost(it) }
             }
         }
 
         private fun releasePlayer() {
+            isPrepared = false
             try {
                 mediaPlayer?.stop()
                 mediaPlayer?.reset()
