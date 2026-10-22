@@ -2,6 +2,7 @@ package com.niranjan.auroralivepaper
 
 import android.Manifest
 import android.app.AlertDialog
+import android.app.WallpaperInfo
 import android.app.WallpaperManager
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -332,7 +333,12 @@ class MainActivity : ComponentActivity() {
                         pendingLockPath = null
 
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            val lockInfo = try { wm.getWallpaperInfo(WallpaperManager.FLAG_LOCK) } catch (e: Exception) { null }
+                            val lockInfo = try {
+                                val method = WallpaperManager::class.java.getMethod("getWallpaperInfo", Int::class.javaPrimitiveType)
+                                method.invoke(wm, WallpaperManager.FLAG_LOCK) as? WallpaperInfo
+                            } catch (e: Throwable) {
+                                null
+                            }
                             val isOurLockActive = lockInfo != null &&
                                     lockInfo.packageName == packageName &&
                                     lockInfo.serviceName == AuroraWallpaperService::class.java.name

@@ -56,6 +56,14 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                     SettingsPrefs.setPlayWallpaperSound(context, it)
                 }
 
+                Text(
+                    text = "Sound only plays on the Home Screen when unlocked. Lock screen is automatically kept quiet.",
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
+                )
+
                 if (playSound) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(

@@ -307,7 +307,15 @@ fun WallpaperPickerScreen(
                         onClear = {
                             performAuroraHaptic(context, haptic)
                             activePath?.let { File(it).delete() }
-                            prefs.edit().remove("media_path").remove("media_type").putLong("media_version", System.currentTimeMillis()).apply()
+                            val version = System.currentTimeMillis()
+                            prefs.edit().remove("media_path").remove("media_type").putLong("media_version", version).apply()
+                            try {
+                                val reloadIntent = Intent(com.niranjan.auroralivepaper.AuroraWallpaperService.ACTION_RELOAD_WALLPAPER).apply {
+                                    setPackage(context.packageName)
+                                    putExtra("media_version", version)
+                                }
+                                context.sendBroadcast(reloadIntent)
+                            } catch (_: Exception) {}
                             activePath = null
                             status = "Wallpaper cleared"
                         }
@@ -1409,12 +1417,25 @@ fun cleanupStagingFiles(context: Context) {
 }
 
 fun saveWallpaperMediaPath(context: Context, path: String, type: String) {
+    val version = System.currentTimeMillis()
     val prefs = context.getSharedPreferences("aurora_prefs", Context.MODE_PRIVATE)
     prefs.edit()
         .putString("media_path", path)
         .putString("media_type", type)
-        .putLong("media_version", System.currentTimeMillis())
+        .putLong("media_version", version)
         .apply()
+
+    try {
+        val reloadIntent = Intent(com.niranjan.auroralivepaper.AuroraWallpaperService.ACTION_RELOAD_WALLPAPER).apply {
+            setPackage(context.packageName)
+            putExtra("media_path", path)
+            putExtra("media_type", type)
+            putExtra("media_version", version)
+        }
+        context.sendBroadcast(reloadIntent)
+    } catch (e: Exception) {
+        Log.w("AuroraPicker", "Failed to send reload broadcast", e)
+    }
 }
 
 fun applyLockScreenFromVideo(context: Context, videoPath: String, seconds: Float = 1f): Boolean {
