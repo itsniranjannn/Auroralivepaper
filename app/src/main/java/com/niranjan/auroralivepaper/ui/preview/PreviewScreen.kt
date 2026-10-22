@@ -6,14 +6,18 @@ import android.net.Uri
 import android.view.ViewGroup
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.CropFree
+import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +29,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -43,16 +48,17 @@ fun PreviewScreen(
     mediaPath: String?,
     mediaType: String, // "video", "gif", or "image"
     imageBitmap: Bitmap? = null,
-    onSetHome: () -> Unit,
-    onSetLock: () -> Unit,
-    onSetBoth: () -> Unit,
+    onSetHome: (scalingMode: String) -> Unit,
+    onSetLock: (scalingMode: String) -> Unit,
+    onSetBoth: (scalingMode: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     var showGuidanceDialog by remember { mutableStateOf(false) }
     var guidanceMessage by remember { mutableStateOf("") }
-    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var pendingAction by remember { mutableStateOf<((String) -> Unit)?>(null) }
 
+    var scalingMode by remember { mutableStateOf(SettingsPrefs.scalingMode(context)) }
     var isSoundOn by remember { mutableStateOf(SettingsPrefs.playWallpaperSound(context)) }
     var volumeVal by remember { mutableStateOf(SettingsPrefs.wallpaperVolume(context)) }
     var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
@@ -75,15 +81,19 @@ fun PreviewScreen(
         when (mediaType) {
             "video" -> if (mediaPath != null) {
                 AndroidView(
-                    factory = {
-                        PlayerView(context).apply {
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
                             layoutParams = ViewGroup.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
                             useController = false
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            val player = ExoPlayer.Builder(context).build().apply {
+                            resizeMode = if (scalingMode == "fit") {
+                                AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            } else {
+                                AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            }
+                            val player = ExoPlayer.Builder(ctx).build().apply {
                                 setMediaItem(MediaItem.fromUri(Uri.fromFile(File(mediaPath))))
                                 repeatMode = ExoPlayer.REPEAT_MODE_ALL
                                 volume = if (isSoundOn) volumeVal else 0f
@@ -92,6 +102,13 @@ fun PreviewScreen(
                             }
                             this.player = player
                             exoPlayerInstance = player
+                        }
+                    },
+                    update = { view ->
+                        view.resizeMode = if (scalingMode == "fit") {
+                            AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        } else {
+                            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                         }
                     },
                     modifier = Modifier.fillMaxSize()
@@ -106,34 +123,72 @@ fun PreviewScreen(
                         bitmap = it.asImageBitmap(),
                         contentDescription = "Preview",
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
+                        contentScale = if (scalingMode == "fit") ContentScale.Fit else ContentScale.Crop
                     )
                 }
             }
         }
 
-        // Floating audio button in top right for videos
-        if (mediaType == "video") {
-            IconButton(
-                onClick = {
-                    isSoundOn = !isSoundOn
-                    SettingsPrefs.setPlayWallpaperSound(context, isSoundOn)
-                    exoPlayerInstance?.volume = if (isSoundOn) volumeVal else 0f
-                },
+        // Floating top controls: Mode Chip & Audio Toggle
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Quick Aspect Ratio Toggle Pill
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(16.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFF0D121F).copy(alpha = 0.85f))
-                    .size(44.dp)
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                    .clickable {
+                        val newMode = if (scalingMode == "fill") "fit" else "fill"
+                        scalingMode = newMode
+                        SettingsPrefs.setScalingMode(context, newMode)
+                    }
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
-                Icon(
-                    imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                    contentDescription = "Toggle sound",
-                    tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.size(22.dp)
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (scalingMode == "fit") Icons.Filled.FitScreen else Icons.Filled.CropFree,
+                        contentDescription = "Scale Mode",
+                        tint = Color(0xFF7CE7D7),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (scalingMode == "fit") "Fit (Letterbox)" else "Fill (Screen)",
+                        color = Color.White,
+                        fontFamily = ManropeFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            if (mediaType == "video") {
+                IconButton(
+                    onClick = {
+                        isSoundOn = !isSoundOn
+                        SettingsPrefs.setPlayWallpaperSound(context, isSoundOn)
+                        exoPlayerInstance?.volume = if (isSoundOn) volumeVal else 0f
+                    },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color(0xFF0D121F).copy(alpha = 0.85f))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
+                        .size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                        contentDescription = "Toggle sound",
+                        tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
         }
 
@@ -164,6 +219,101 @@ fun PreviewScreen(
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
+
+                // Aspect Ratio Selector Segmented Switch
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Fill Button
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (scalingMode == "fill") Color(0xFF4ECCA3).copy(alpha = 0.22f) else Color.Transparent)
+                            .border(
+                                width = if (scalingMode == "fill") 1.dp else 0.dp,
+                                color = if (scalingMode == "fill") Color(0xFF4ECCA3) else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clickable {
+                                scalingMode = "fill"
+                                SettingsPrefs.setScalingMode(context, "fill")
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.CropFree,
+                                contentDescription = null,
+                                tint = if (scalingMode == "fill") Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Fill (Full Screen)",
+                                color = if (scalingMode == "fill") Color.White else Color.White.copy(alpha = 0.6f),
+                                fontFamily = ManropeFamily,
+                                fontWeight = if (scalingMode == "fill") FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    // Fit Button
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (scalingMode == "fit") Color(0xFF4ECCA3).copy(alpha = 0.22f) else Color.Transparent)
+                            .border(
+                                width = if (scalingMode == "fit") 1.dp else 0.dp,
+                                color = if (scalingMode == "fit") Color(0xFF4ECCA3) else Color.Transparent,
+                                shape = RoundedCornerShape(10.dp)
+                            )
+                            .clickable {
+                                scalingMode = "fit"
+                                SettingsPrefs.setScalingMode(context, "fit")
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.FitScreen,
+                                contentDescription = null,
+                                tint = if (scalingMode == "fit") Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Fit (Entire Video)",
+                                color = if (scalingMode == "fit") Color.White else Color.White.copy(alpha = 0.6f),
+                                fontFamily = ManropeFamily,
+                                fontWeight = if (scalingMode == "fit") FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (scalingMode == "fill")
+                        "Zooms to fill screen completely with zero black borders"
+                    else
+                        "Preserves 100% of the video with letterbox — nothing is cropped",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
 
                 if (mediaType == "video") {
                     Row(
@@ -247,7 +397,7 @@ fun PreviewScreen(
                             pendingAction = onSetHome
                             showGuidanceDialog = true
                         } else {
-                            onSetHome()
+                            onSetHome(scalingMode)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -265,7 +415,7 @@ fun PreviewScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Button(
-                    onClick = onSetLock,
+                    onClick = { onSetLock(scalingMode) },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF6C5CE7),
@@ -287,7 +437,7 @@ fun PreviewScreen(
                             pendingAction = onSetBoth
                             showGuidanceDialog = true
                         } else {
-                            onSetBoth()
+                            onSetBoth(scalingMode)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -330,7 +480,7 @@ fun PreviewScreen(
                     Button(
                         onClick = {
                             showGuidanceDialog = false
-                            pendingAction?.invoke()
+                            pendingAction?.invoke(scalingMode)
                             pendingAction = null
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C5CE7))

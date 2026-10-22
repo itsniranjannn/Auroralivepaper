@@ -1025,13 +1025,33 @@ fun isSamsungVideoLockAvailable(context: Context): Boolean {
     }
 }
 
-fun applyImageWallpaper(context: Context, imagePath: String, flags: Int): Boolean {
+fun applyImageWallpaper(context: Context, imagePath: String, flags: Int, scalingMode: String = "fill"): Boolean {
     return try {
-        val bitmap = BitmapFactory.decodeFile(imagePath)
-        if (bitmap != null) {
-            WallpaperManager.getInstance(context).setBitmap(bitmap, null, true, flags)
-            true
-        } else false
+        val bitmap = BitmapFactory.decodeFile(imagePath) ?: return false
+        val wm = WallpaperManager.getInstance(context)
+        if (scalingMode == "fit") {
+            val dm = context.resources.displayMetrics
+            val screenW = dm.widthPixels
+            val screenH = dm.heightPixels
+            val fitted = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(fitted)
+            canvas.drawColor(android.graphics.Color.BLACK)
+            val scale = minOf(screenW.toFloat() / bitmap.width, screenH.toFloat() / bitmap.height)
+            val dx = (screenW - bitmap.width * scale) / 2f
+            val dy = (screenH - bitmap.height * scale) / 2f
+            val matrix = android.graphics.Matrix().apply {
+                postScale(scale, scale)
+                postTranslate(dx, dy)
+            }
+            canvas.drawBitmap(bitmap, matrix, null)
+            wm.setBitmap(fitted, null, true, flags)
+            fitted.recycle()
+            bitmap.recycle()
+        } else {
+            wm.setBitmap(bitmap, null, true, flags)
+            bitmap.recycle()
+        }
+        true
     } catch (e: Exception) {
         Log.w("Aurora", "Failed to apply image wallpaper", e)
         false
@@ -1416,20 +1436,29 @@ fun cleanupStagingFiles(context: Context) {
     }
 }
 
-fun saveWallpaperMediaPath(context: Context, path: String, type: String) {
+fun saveWallpaperMediaPath(
+    context: Context,
+    path: String,
+    type: String,
+    scalingMode: String = com.niranjan.auroralivepaper.data.SettingsPrefs.scalingMode(context)
+) {
     val version = System.currentTimeMillis()
     val prefs = context.getSharedPreferences("aurora_prefs", Context.MODE_PRIVATE)
     prefs.edit()
         .putString("media_path", path)
         .putString("media_type", type)
+        .putString("scaling_mode", scalingMode)
         .putLong("media_version", version)
         .apply()
+
+    com.niranjan.auroralivepaper.data.SettingsPrefs.setScalingMode(context, scalingMode)
 
     try {
         val reloadIntent = Intent(com.niranjan.auroralivepaper.AuroraWallpaperService.ACTION_RELOAD_WALLPAPER).apply {
             setPackage(context.packageName)
             putExtra("media_path", path)
             putExtra("media_type", type)
+            putExtra("scaling_mode", scalingMode)
             putExtra("media_version", version)
         }
         context.sendBroadcast(reloadIntent)

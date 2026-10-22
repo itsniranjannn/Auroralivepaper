@@ -30,6 +30,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
     var playSound by remember { mutableStateOf(SettingsPrefs.playWallpaperSound(context)) }
     var volume by remember { mutableStateOf(SettingsPrefs.wallpaperVolume(context)) }
     var resolution by remember { mutableStateOf(SettingsPrefs.resolutionMode(context)) }
+    var scalingMode by remember { mutableStateOf(SettingsPrefs.scalingMode(context)) }
     var loopAuto by remember { mutableStateOf(SettingsPrefs.loopAutomatically(context)) }
 
     SettingsAuroraBackground {
@@ -108,6 +109,27 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "Note: Wallpaper audio level operates independently from phone ringer/notification volume.",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+
+            SettingsSection("Aspect Ratio & Scaling") {
+                RadioRow("Fill (Full Screen - Recommended)", scalingMode == "fill") {
+                    scalingMode = "fill"
+                    performAuroraHaptic(context, haptic)
+                    SettingsPrefs.setScalingMode(context, "fill")
+                }
+                RadioRow("Fit (Preserve entire video with letterbox)", scalingMode == "fit") {
+                    scalingMode = "fit"
+                    performAuroraHaptic(context, haptic)
+                    SettingsPrefs.setScalingMode(context, "fit")
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Fill zooms to eliminate black bars. Fit displays the full original video without cropping any edges.",
                     color = Color.White.copy(alpha = 0.5f),
                     fontFamily = ManropeFamily,
                     fontSize = 12.sp,

@@ -183,7 +183,7 @@ class MainActivity : ComponentActivity() {
                         PreviewScreen(
                             mediaPath = path,
                             mediaType = type,
-                            onSetHome = {
+                            onSetHome = { scalingMode ->
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
                                     val activeFile = File(activePath)
@@ -192,10 +192,10 @@ class MainActivity : ComponentActivity() {
                                         return@let
                                     }
                                     if (type == "image") {
-                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM)
+                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM, scalingMode)
                                         Toast.makeText(this@MainActivity, if (ok) "Home wallpaper set!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                        saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
                                         val wm = WallpaperManager.getInstance(this@MainActivity)
                                         val info = wm.wallpaperInfo
                                         val isOurServiceActive = info != null &&
@@ -212,7 +212,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 navController.popBackStack("home", false)
                             },
-                            onSetLock = {
+                            onSetLock = { scalingMode ->
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
                                     val activeFile = File(activePath)
@@ -221,7 +221,7 @@ class MainActivity : ComponentActivity() {
                                         return@let
                                     }
                                     if (type == "image") {
-                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK)
+                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK, scalingMode)
                                         Toast.makeText(this@MainActivity, if (ok) "Lock wallpaper set!" else "Failed", Toast.LENGTH_SHORT).show()
                                     } else if (type == "gif") {
                                         val ok = applyLockScreenFromGif(this@MainActivity, activePath)
@@ -268,7 +268,7 @@ class MainActivity : ComponentActivity() {
                                                 .setTitle("Lock Screen Setup")
                                                 .setMessage("Your phone may offer a lock screen option on the next screen. If it doesn't, the lock screen will get a still image.")
                                                 .setPositiveButton("Continue") { _, _ ->
-                                                    saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                                    saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
                                                     checkedPickerReturn = true
                                                     pendingLockStillFallback = true
                                                     pendingLockPath = activePath
@@ -281,7 +281,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 navController.popBackStack("home", false)
                             },
-                            onSetBoth = {
+                            onSetBoth = { scalingMode ->
                                 path?.let { stagingPath ->
                                     val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
                                     val activeFile = File(activePath)
@@ -290,10 +290,10 @@ class MainActivity : ComponentActivity() {
                                         return@let
                                     }
                                     if (type == "image") {
-                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK, scalingMode)
                                         Toast.makeText(this@MainActivity, if (ok) "Wallpaper applied to Both!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        saveWallpaperMediaPath(this@MainActivity, activePath, type)
+                                        saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
                                         checkedPickerReturn = true
                                         launchLiveWallpaperPicker(this@MainActivity)
                                     }

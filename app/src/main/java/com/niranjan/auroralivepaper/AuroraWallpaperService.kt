@@ -59,6 +59,7 @@ class AuroraWallpaperService : WallpaperService() {
 
         private var currentLoadedPath: String? = null
         private var currentLoadedVersion: Long = 0L
+        private var currentLoadedScalingMode: String? = null
         private var retryCount = 0
         private val MAX_RETRIES = 3
 
@@ -84,11 +85,16 @@ class AuroraWallpaperService : WallpaperService() {
             }
         }
 
-        private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             try {
                 updatePlayerSettings()
                 refreshPowerState()
                 updatePlaybackState()
+                if (key == "scaling_mode") {
+                    currentHolder?.let { holder ->
+                        if (holder.surface.isValid) loadWallpaper(holder)
+                    }
+                }
             } catch (e: Exception) {
                 Log.e("AuroraEngine", "Error in settingsListener", e)
             }
@@ -96,9 +102,9 @@ class AuroraWallpaperService : WallpaperService() {
 
         private val mediaListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             try {
-                if (key == "media_version" || key == "media_path") {
+                if (key == "media_version" || key == "media_path" || key == "scaling_mode") {
                     val savedPath = mediaPrefs.getString("media_path", null)
-                    Log.d("AuroraEngine", "media preference changed: reload media from path=$savedPath")
+                    Log.d("AuroraEngine", "media preference changed ($key): reload media from path=$savedPath")
                     retryCount = 0
                     currentHolder?.let { holder ->
                         if (holder.surface.isValid) {
@@ -208,8 +214,10 @@ class AuroraWallpaperService : WallpaperService() {
                 currentHolder = holder
                 val savedPath = mediaPrefs.getString("media_path", null)
                 val savedVersion = mediaPrefs.getLong("media_version", 0L)
+                val savedScaling = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
                 val needsReload = (savedPath != currentLoadedPath) ||
                         (savedVersion != currentLoadedVersion) ||
+                        (savedScaling != currentLoadedScalingMode) ||
                         (mediaPlayer == null && gifMovie == null)
 
                 if (needsReload && !shouldPause()) {
@@ -254,8 +262,10 @@ class AuroraWallpaperService : WallpaperService() {
 
                     val savedPath = mediaPrefs.getString("media_path", null)
                     val savedVersion = mediaPrefs.getLong("media_version", 0L)
+                    val savedScaling = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
                     val needsReload = (savedPath != currentLoadedPath) ||
                             (savedVersion != currentLoadedVersion) ||
+                            (savedScaling != currentLoadedScalingMode) ||
                             (mediaPlayer == null && gifMovie == null)
 
                     if (needsReload) {
@@ -434,8 +444,10 @@ class AuroraWallpaperService : WallpaperService() {
                 } else {
                     val savedPath = mediaPrefs.getString("media_path", null)
                     val savedVersion = mediaPrefs.getLong("media_version", 0L)
+                    val savedScaling = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
                     val needsReload = (savedPath != currentLoadedPath) ||
                             (savedVersion != currentLoadedVersion) ||
+                            (savedScaling != currentLoadedScalingMode) ||
                             (mediaPlayer == null && gifMovie == null)
 
                     if (needsReload && currentHolder?.surface?.isValid == true && !gifRunning) {
@@ -474,8 +486,11 @@ class AuroraWallpaperService : WallpaperService() {
                     "loadWallpaper: path=$savedPath, version=$savedVersion, type=$mediaType, exists=$fileExists, size=$fileSize, isPreview=$isPreview"
                 )
 
+                val savedScaling = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
+
                 currentLoadedPath = savedPath
                 currentLoadedVersion = savedVersion
+                currentLoadedScalingMode = savedScaling
 
                 if (!fileExists || savedPath == null) {
                     releasePlayer()
@@ -506,7 +521,12 @@ class AuroraWallpaperService : WallpaperService() {
                         if (canvas != null) {
                             val w = canvas.width.toFloat()
                             val h = canvas.height.toFloat()
-                            val scale = maxOf(w / bitmap.width, h / bitmap.height)
+                            val scalingMode = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
+                            val scale = if (scalingMode == "fit") {
+                                minOf(w / bitmap.width, h / bitmap.height)
+                            } else {
+                                maxOf(w / bitmap.width, h / bitmap.height)
+                            }
                             val dx = (w - bitmap.width * scale) / 2f
                             val dy = (h - bitmap.height * scale) / 2f
                             canvas.drawColor(Color.BLACK)
@@ -629,7 +649,12 @@ class AuroraWallpaperService : WallpaperService() {
                         setSurface(holder.surface)
                     }
 
-                    setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+                    val scalingMode = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
+                    if (scalingMode == "fit") {
+                        setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
+                    } else {
+                        setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+                    }
                     setOnPreparedListener { mp ->
                         Log.d("AuroraEngine", "MediaPlayer prepared successfully: duration=${mp.duration}ms, isPreview=$isPreview")
                         try {
@@ -707,10 +732,18 @@ class AuroraWallpaperService : WallpaperService() {
                     }
                     movie.setTime(elapsed)
                     canvas.drawColor(Color.BLACK)
-                    val scale = maxOf(
-                        canvas.width.toFloat() / movie.width(),
-                        canvas.height.toFloat() / movie.height()
-                    )
+                    val scalingMode = mediaPrefs.getString("scaling_mode", SettingsPrefs.scalingMode(applicationContext)) ?: "fill"
+                    val scale = if (scalingMode == "fit") {
+                        minOf(
+                            canvas.width.toFloat() / movie.width(),
+                            canvas.height.toFloat() / movie.height()
+                        )
+                    } else {
+                        maxOf(
+                            canvas.width.toFloat() / movie.width(),
+                            canvas.height.toFloat() / movie.height()
+                        )
+                    }
                     canvas.save()
                     val dx = (canvas.width - movie.width() * scale) / 2f
                     val dy = (canvas.height - movie.height() * scale) / 2f

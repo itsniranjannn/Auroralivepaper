@@ -22,6 +22,7 @@ object SettingsPrefs {
     private const val KEY_PLAY_WALLPAPER_SOUND = "play_wallpaper_sound"
     private const val KEY_WALLPAPER_VOLUME = "wallpaper_volume"
     private const val KEY_RESOLUTION_MODE = "resolution_mode"
+    private const val KEY_SCALING_MODE = "scaling_mode"
     private const val KEY_LOOP_AUTOMATICALLY = "loop_automatically"
 
     private fun prefs(context: Context) =
@@ -88,6 +89,14 @@ object SettingsPrefs {
 
     fun setResolutionMode(context: Context, value: String) {
         prefs(context).edit().putString(KEY_RESOLUTION_MODE, value).apply()
+    }
+
+    /** One of: "fill" (zooms to fill screen), "fit" (preserves entire video with letterboxing) */
+    fun scalingMode(context: Context): String =
+        prefs(context).getString(KEY_SCALING_MODE, "fill") ?: "fill"
+
+    fun setScalingMode(context: Context, value: String) {
+        prefs(context).edit().putString(KEY_SCALING_MODE, value).apply()
     }
 
     fun loopAutomatically(context: Context): Boolean =
