@@ -4,14 +4,19 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.ViewGroup
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.CropFree
@@ -29,7 +34,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -62,6 +66,7 @@ fun PreviewScreen(
     var isSoundOn by remember { mutableStateOf(SettingsPrefs.playWallpaperSound(context)) }
     var volumeVal by remember { mutableStateOf(SettingsPrefs.wallpaperVolume(context)) }
     var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
+    var isUiVisible by remember { mutableStateOf(true) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -76,8 +81,21 @@ fun PreviewScreen(
         } else null
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                isUiVisible = !isUiVisible
+            }
+    ) {
 
+        // ====================================================================
+        // Background Wallpaper Viewport (100% full screen)
+        // ====================================================================
         when (mediaType) {
             "video" -> if (mediaPath != null) {
                 AndroidView(
@@ -129,344 +147,299 @@ fun PreviewScreen(
             }
         }
 
-        // Floating top controls: Mode Chip & Audio Toggle
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // ====================================================================
+        // Floating Top Bar: Back Button (Left) & Aspect / Audio Controls (Right)
+        // ====================================================================
+        AnimatedVisibility(
+            visible = isUiVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            // Quick Aspect Ratio Toggle Pill
-            Box(
+            Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF0D121F).copy(alpha = 0.85f))
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
-                    .clickable {
-                        val newMode = if (scalingMode == "fill") "fit" else "fill"
-                        scalingMode = newMode
-                        SettingsPrefs.setScalingMode(context, newMode)
-                    }
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (scalingMode == "fit") Icons.Filled.FitScreen else Icons.Filled.CropFree,
-                        contentDescription = "Scale Mode",
-                        tint = Color(0xFF7CE7D7),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (scalingMode == "fit") "Fit (Letterbox)" else "Fill (Screen)",
-                        color = Color.White,
-                        fontFamily = ManropeFamily,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            if (mediaType == "video") {
+                // Back Button
                 IconButton(
-                    onClick = {
-                        isSoundOn = !isSoundOn
-                        SettingsPrefs.setPlayWallpaperSound(context, isSoundOn)
-                        exoPlayerInstance?.volume = if (isSoundOn) volumeVal else 0f
-                    },
+                    onClick = onDismiss,
                     modifier = Modifier
                         .clip(CircleShape)
                         .background(Color(0xFF0D121F).copy(alpha = 0.85f))
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), CircleShape)
-                        .size(44.dp)
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                        .size(42.dp)
                 ) {
                     Icon(
-                        imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                        contentDescription = "Toggle sound",
-                        tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.size(22.dp)
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
-            }
-        }
 
-        // Frosted Glass Action Sheet at bottom
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                .background(Color(0xFF0D121F).copy(alpha = 0.95f))
-                .padding(24.dp)
-                .navigationBarsPadding()
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = if (mediaType == "image") "Set Image Wallpaper" else "Set Live Wallpaper",
-                    color = Color.White,
-                    fontFamily = ManropeFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Full resolution preview",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontFamily = ManropeFamily,
-                    fontSize = 12.sp
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Aspect Ratio Selector Segmented Switch
+                // Right Controls: Fit/Fill Toggle & Audio Toggle
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Fill Button
+                    // Quick Aspect Ratio Toggle Pill
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (scalingMode == "fill") Color(0xFF4ECCA3).copy(alpha = 0.22f) else Color.Transparent)
-                            .border(
-                                width = if (scalingMode == "fill") 1.dp else 0.dp,
-                                color = if (scalingMode == "fill") Color(0xFF4ECCA3) else Color.Transparent,
-                                shape = RoundedCornerShape(10.dp)
-                            )
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color(0xFF0D121F).copy(alpha = 0.85f))
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                             .clickable {
-                                scalingMode = "fill"
-                                SettingsPrefs.setScalingMode(context, "fill")
+                                val newMode = if (scalingMode == "fill") "fit" else "fill"
+                                scalingMode = newMode
+                                SettingsPrefs.setScalingMode(context, newMode)
                             }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Filled.CropFree,
-                                contentDescription = null,
-                                tint = if (scalingMode == "fill") Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                                imageVector = if (scalingMode == "fit") Icons.Filled.FitScreen else Icons.Filled.CropFree,
+                                contentDescription = "Scale Mode",
+                                tint = Color(0xFF7CE7D7),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "Fill (Full Screen)",
-                                color = if (scalingMode == "fill") Color.White else Color.White.copy(alpha = 0.6f),
-                                fontFamily = ManropeFamily,
-                                fontWeight = if (scalingMode == "fill") FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-
-                    // Fit Button
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (scalingMode == "fit") Color(0xFF4ECCA3).copy(alpha = 0.22f) else Color.Transparent)
-                            .border(
-                                width = if (scalingMode == "fit") 1.dp else 0.dp,
-                                color = if (scalingMode == "fit") Color(0xFF4ECCA3) else Color.Transparent,
-                                shape = RoundedCornerShape(10.dp)
-                            )
-                            .clickable {
-                                scalingMode = "fit"
-                                SettingsPrefs.setScalingMode(context, "fit")
-                            }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.FitScreen,
-                                contentDescription = null,
-                                tint = if (scalingMode == "fit") Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Fit (Entire Video)",
-                                color = if (scalingMode == "fit") Color.White else Color.White.copy(alpha = 0.6f),
-                                fontFamily = ManropeFamily,
-                                fontWeight = if (scalingMode == "fit") FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (scalingMode == "fill")
-                        "Zooms to fill screen completely with zero black borders"
-                    else
-                        "Preserves 100% of the video with letterbox — nothing is cropped",
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontFamily = ManropeFamily,
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                if (mediaType == "video") {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White.copy(alpha = 0.07f))
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
-                            contentDescription = null,
-                            tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.5f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = if (isSoundOn) "Audio enabled (${(volumeVal * 100).toInt()}%)" else "Audio muted",
+                                text = if (scalingMode == "fit") "Fit (Letterbox)" else "Fill (Screen)",
                                 color = Color.White,
                                 fontFamily = ManropeFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                            Text(
-                                text = "Home screen only • Lock screen stays silent",
-                                color = Color.White.copy(alpha = 0.5f),
-                                fontFamily = ManropeFamily,
-                                fontSize = 11.sp
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
                             )
                         }
-                        Switch(
-                            checked = isSoundOn,
-                            onCheckedChange = { checked ->
-                                isSoundOn = checked
-                                SettingsPrefs.setPlayWallpaperSound(context, checked)
-                                exoPlayerInstance?.volume = if (checked) volumeVal else 0f
+                    }
+
+                    // Video Sound Toggle
+                    if (mediaType == "video") {
+                        IconButton(
+                            onClick = {
+                                isSoundOn = !isSoundOn
+                                SettingsPrefs.setPlayWallpaperSound(context, isSoundOn)
+                                exoPlayerInstance?.volume = if (isSoundOn) volumeVal else 0f
                             },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFF00B894),
-                                uncheckedThumbColor = Color.White.copy(alpha = 0.6f),
-                                uncheckedTrackColor = Color.White.copy(alpha = 0.15f)
-                            )
-                        )
-                    }
-
-                    if (isSoundOn) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(Color(0xFF0D121F).copy(alpha = 0.85f))
+                                .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
+                                .size(42.dp)
                         ) {
-                            Text("Volume", color = Color.White.copy(alpha = 0.5f), fontFamily = ManropeFamily, fontSize = 11.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Slider(
-                                value = volumeVal,
-                                onValueChange = { newVol ->
-                                    volumeVal = newVol
-                                    SettingsPrefs.setWallpaperVolume(context, newVol)
-                                    exoPlayerInstance?.volume = newVol
-                                },
-                                valueRange = 0.05f..1f,
-                                modifier = Modifier.weight(1f),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color(0xFF7CE7D7),
-                                    activeTrackColor = Color(0xFF7CE7D7),
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                                )
+                            Icon(
+                                imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                contentDescription = "Toggle sound",
+                                tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(14.dp))
-                }
-
-                Button(
-                    onClick = {
-                        if (mediaType == "video" || mediaType == "gif") {
-                            guidanceMessage = "Choose 'Home screen' on the next screen."
-                            pendingAction = onSetHome
-                            showGuidanceDialog = true
-                        } else {
-                            onSetHome(scalingMode)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF00B894),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Filled.Home, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Set as Home Screen", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = { onSetLock(scalingMode) },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF6C5CE7),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Filled.Lock, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Set as Lock Screen", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Button(
-                    onClick = {
-                        if (mediaType == "video" || mediaType == "gif") {
-                            guidanceMessage = "Choose 'Home screen and lock screen' on the next screen."
-                            pendingAction = onSetBoth
-                            showGuidanceDialog = true
-                        } else {
-                            onSetBoth(scalingMode)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF0984E3),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Filled.Wallpaper, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Set as Both", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.75f), fontFamily = ManropeFamily, fontSize = 14.sp)
                 }
             }
         }
 
+        // ====================================================================
+        // Compact Floating Bottom Action Dock (Takes minimal screen space)
+        // ====================================================================
+        AnimatedVisibility(
+            visible = isUiVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xFF0D121F).copy(alpha = 0.88f))
+                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {}
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Optional Volume Slider if sound is enabled
+                        if (mediaType == "video" && isSoundOn) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = null,
+                                    tint = Color(0xFF7CE7D7),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Slider(
+                                    value = volumeVal,
+                                    onValueChange = { newVol ->
+                                        volumeVal = newVol
+                                        SettingsPrefs.setWallpaperVolume(context, newVol)
+                                        exoPlayerInstance?.volume = newVol
+                                    },
+                                    valueRange = 0.05f..1f,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(24.dp),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color(0xFF7CE7D7),
+                                        activeTrackColor = Color(0xFF7CE7D7),
+                                        inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${(volumeVal * 100).toInt()}%",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontFamily = ManropeFamily,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        // Compact Horizontal 3-Action Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // 1. Home Screen Button
+                            Button(
+                                onClick = {
+                                    if (mediaType == "video" || mediaType == "gif") {
+                                        guidanceMessage = "Choose 'Home screen' on the next screen."
+                                        pendingAction = onSetHome
+                                        showGuidanceDialog = true
+                                    } else {
+                                        onSetHome(scalingMode)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF00B894).copy(alpha = 0.90f),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Home,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Home",
+                                    fontFamily = ManropeFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            // 2. Lock Screen Button
+                            Button(
+                                onClick = { onSetLock(scalingMode) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF6C5CE7).copy(alpha = 0.90f),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Lock,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Lock",
+                                    fontFamily = ManropeFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+                            // 3. Both Screens Button
+                            Button(
+                                onClick = {
+                                    if (mediaType == "video" || mediaType == "gif") {
+                                        guidanceMessage = "Choose 'Home screen and lock screen' on the next screen."
+                                        pendingAction = onSetBoth
+                                        showGuidanceDialog = true
+                                    } else {
+                                        onSetBoth(scalingMode)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF0984E3).copy(alpha = 0.90f),
+                                    contentColor = Color.White
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Wallpaper,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Both",
+                                    fontFamily = ManropeFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // System Guidance Dialog (For Wallpaper Service Handoff)
+        // ====================================================================
         if (showGuidanceDialog) {
             AlertDialog(
                 onDismissRequest = { showGuidanceDialog = false },
                 title = {
-                    Text("Setting Live Wallpaper", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Setting Live Wallpaper",
+                        color = Color.White,
+                        fontFamily = ManropeFamily,
+                        fontWeight = FontWeight.Bold
+                    )
                 },
                 text = {
                     Text(
@@ -485,7 +458,11 @@ fun PreviewScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C5CE7))
                     ) {
-                        Text("Continue to Set Wallpaper", fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Continue to Set Wallpaper",
+                            fontFamily = ManropeFamily,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 },
                 containerColor = Color(0xFF141A29),
