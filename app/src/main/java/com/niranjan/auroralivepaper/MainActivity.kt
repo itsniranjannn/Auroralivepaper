@@ -64,13 +64,16 @@ import com.niranjan.auroralivepaper.ui.settings.BatterySettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.StorageSettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.ExperienceSettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.AboutScreen
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @UnstableApi
 class MainActivity : ComponentActivity() {
 
+    private var isSettingWallpaper = false
     private var checkedPickerReturn = false
     private var pendingLockExportAction: (() -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -209,120 +212,181 @@ class MainActivity : ComponentActivity() {
                             mediaPath = path,
                             mediaType = type,
                             onSetHome = { scalingMode ->
-                                path?.let { stagingPath ->
-                                    val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
-                                    val activeFile = File(activePath)
-                                    if (!activeFile.exists() || !activeFile.canRead()) {
-                                        Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
-                                        return@let
-                                    }
-                                    if (type == "image") {
-                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM, scalingMode)
-                                        Toast.makeText(this@MainActivity, if (ok) "Home wallpaper set!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
-                                        val isOurServiceActive = isAuroraWallpaperActive(this@MainActivity)
-
-                                        if (isOurServiceActive) {
-                                            Toast.makeText(this@MainActivity, "Wallpaper updated!", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            checkedPickerReturn = true
-                                            launchLiveWallpaperPicker(this@MainActivity)
+                                if (isSettingWallpaper) return@PreviewScreen
+                                isSettingWallpaper = true
+                                navController.popBackStack("home", false)
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    try {
+                                        path?.let { stagingPath ->
+                                            val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                            val activeFile = File(activePath)
+                                            if (!activeFile.exists() || !activeFile.canRead()) {
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
+                                                }
+                                                return@let
+                                            }
+                                            if (type == "image") {
+                                                val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM, scalingMode)
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, if (ok) "Home wallpaper set!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
+                                                val isOurServiceActive = isAuroraWallpaperActive(this@MainActivity)
+                                                withContext(Dispatchers.Main) {
+                                                    if (isOurServiceActive) {
+                                                        Toast.makeText(this@MainActivity, "Wallpaper updated!", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        checkedPickerReturn = true
+                                                        launchLiveWallpaperPicker(this@MainActivity)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (t: Throwable) {
+                                        Log.e("MainActivity", "Failed to set home wallpaper", t)
+                                    } finally {
+                                        withContext(Dispatchers.Main) {
+                                            isSettingWallpaper = false
                                         }
                                     }
                                 }
-                                navController.popBackStack("home", false)
                             },
                             onSetLock = { scalingMode ->
-                                path?.let { stagingPath ->
-                                    val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
-                                    val activeFile = File(activePath)
-                                    if (!activeFile.exists() || !activeFile.canRead()) {
-                                        Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
-                                        return@let
-                                    }
-                                    if (type == "image") {
-                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK, scalingMode)
-                                        Toast.makeText(this@MainActivity, if (ok) "Lock wallpaper set!" else "Failed", Toast.LENGTH_SHORT).show()
-                                    } else if (type == "gif") {
-                                        val ok = applyLockScreenFromGif(this@MainActivity, activePath)
-                                        Toast.makeText(this@MainActivity, if (ok) "GIFs can't play on the lock screen. Use Set as Both for live." else "Failed", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        if (isSamsungVideoLockAvailable(this@MainActivity)) {
-                                            val performLockExport = {
-                                                lifecycleScope.launch {
-                                                    Toast.makeText(this@MainActivity, "Preparing video for Lock screen...", Toast.LENGTH_SHORT).show()
-                                                    var trimmedPath: String? = null
-                                                    try {
-                                                        trimmedPath = trimVideoTo15s(this@MainActivity, activePath)
-                                                    } catch (e: Exception) {
-                                                        Log.e("MainActivity", "Video trimming failed", e)
-                                                    }
-
-                                                    if (trimmedPath.isNullOrBlank()) {
-                                                        Toast.makeText(this@MainActivity, "Could not trim the video", Toast.LENGTH_SHORT).show()
-                                                        return@launch
-                                                    }
-
-                                                    val contentUri = exportVideoToMediaStore(this@MainActivity, trimmedPath)
-                                                    if (contentUri != null) {
-                                                        val launched = launchSamsungVideoLockEditor(this@MainActivity, contentUri)
-                                                        if (!launched) {
-                                                            Toast.makeText(this@MainActivity, "Could not launch video lock editor", Toast.LENGTH_SHORT).show()
-                                                        }
-                                                    } else {
-                                                        Toast.makeText(this@MainActivity, "Could not export video to MediaStore", Toast.LENGTH_SHORT).show()
-                                                    }
+                                if (isSettingWallpaper) return@PreviewScreen
+                                isSettingWallpaper = true
+                                navController.popBackStack("home", false)
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    try {
+                                        path?.let { stagingPath ->
+                                            val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                            val activeFile = File(activePath)
+                                            if (!activeFile.exists() || !activeFile.canRead()) {
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
                                                 }
+                                                return@let
                                             }
-
-                                            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
-                                                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
-                                            ) {
-                                                pendingLockExportAction = { performLockExport() }
-                                                requestStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                            if (type == "image") {
+                                                val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_LOCK, scalingMode)
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, if (ok) "Lock wallpaper set!" else "Failed", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else if (type == "gif") {
+                                                val ok = applyLockScreenFromGif(this@MainActivity, activePath)
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, if (ok) "GIFs can't play on the lock screen. Use Set as Both for live." else "Failed", Toast.LENGTH_SHORT).show()
+                                                }
                                             } else {
-                                                performLockExport()
-                                            }
-                                        } else {
-                                            AlertDialog.Builder(this@MainActivity)
-                                                .setTitle("Lock Screen Setup")
-                                                .setMessage("To set this video on your lock screen, choose 'Home screen and lock screen' in the live wallpaper picker.")
-                                                .setPositiveButton("Continue") { _, _ ->
-                                                    saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
-                                                    checkedPickerReturn = true
-                                                    launchLiveWallpaperPicker(this@MainActivity)
+                                                if (isSamsungVideoLockAvailable(this@MainActivity)) {
+                                                    withContext(Dispatchers.Main) {
+                                                        val performLockExport = {
+                                                            lifecycleScope.launch {
+                                                                Toast.makeText(this@MainActivity, "Preparing video for Lock screen...", Toast.LENGTH_SHORT).show()
+                                                                var trimmedPath: String? = null
+                                                                try {
+                                                                    trimmedPath = trimVideoTo15s(this@MainActivity, activePath)
+                                                                } catch (e: Exception) {
+                                                                    Log.e("MainActivity", "Video trimming failed", e)
+                                                                }
+
+                                                                if (trimmedPath.isNullOrBlank()) {
+                                                                    Toast.makeText(this@MainActivity, "Could not trim the video", Toast.LENGTH_SHORT).show()
+                                                                    return@launch
+                                                                }
+
+                                                                val contentUri = exportVideoToMediaStore(this@MainActivity, trimmedPath)
+                                                                if (contentUri != null) {
+                                                                    val launched = launchSamsungVideoLockEditor(this@MainActivity, contentUri)
+                                                                    if (!launched) {
+                                                                        Toast.makeText(this@MainActivity, "Could not launch video lock editor", Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                } else {
+                                                                    Toast.makeText(this@MainActivity, "Could not export video to MediaStore", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            }
+                                                        }
+
+                                                        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                                                            ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+                                                        ) {
+                                                            pendingLockExportAction = { performLockExport() }
+                                                            requestStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                                        } else {
+                                                            performLockExport()
+                                                        }
+                                                    }
+                                                } else {
+                                                    withContext(Dispatchers.Main) {
+                                                        AlertDialog.Builder(this@MainActivity)
+                                                            .setTitle("Lock Screen Setup")
+                                                            .setMessage("To set this video on your lock screen, choose 'Home screen and lock screen' in the live wallpaper picker.")
+                                                            .setPositiveButton("Continue") { _, _ ->
+                                                                lifecycleScope.launch(Dispatchers.IO) {
+                                                                    saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
+                                                                    withContext(Dispatchers.Main) {
+                                                                        checkedPickerReturn = true
+                                                                        launchLiveWallpaperPicker(this@MainActivity)
+                                                                    }
+                                                                }
+                                                            }
+                                                            .setNegativeButton("Cancel", null)
+                                                            .show()
+                                                    }
                                                 }
-                                                .setNegativeButton("Cancel", null)
-                                                .show()
+                                            }
+                                        }
+                                    } catch (t: Throwable) {
+                                        Log.e("MainActivity", "Failed to set lock wallpaper", t)
+                                    } finally {
+                                        withContext(Dispatchers.Main) {
+                                            isSettingWallpaper = false
                                         }
                                     }
                                 }
-                                navController.popBackStack("home", false)
                             },
                             onSetBoth = { scalingMode ->
-                                path?.let { stagingPath ->
-                                    val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
-                                    val activeFile = File(activePath)
-                                    if (!activeFile.exists() || !activeFile.canRead()) {
-                                        Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
-                                        return@let
-                                    }
-                                    if (type == "image") {
-                                        val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK, scalingMode)
-                                        Toast.makeText(this@MainActivity, if (ok) "Wallpaper applied to Both!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
-                                        val isOurServiceActive = isAuroraWallpaperActive(this@MainActivity)
-                                        if (isOurServiceActive) {
-                                            Toast.makeText(this@MainActivity, "Wallpaper updated for Both!", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            checkedPickerReturn = true
-                                            launchLiveWallpaperPicker(this@MainActivity)
+                                if (isSettingWallpaper) return@PreviewScreen
+                                isSettingWallpaper = true
+                                navController.popBackStack("home", false)
+                                lifecycleScope.launch(Dispatchers.IO) {
+                                    try {
+                                        path?.let { stagingPath ->
+                                            val activePath = promoteStagingToActive(this@MainActivity, stagingPath, type)
+                                            val activeFile = File(activePath)
+                                            if (!activeFile.exists() || !activeFile.canRead()) {
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, "Error: Media file not readable", Toast.LENGTH_SHORT).show()
+                                                }
+                                                return@let
+                                            }
+                                            if (type == "image") {
+                                                val ok = applyImageWallpaper(this@MainActivity, activePath, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK, scalingMode)
+                                                withContext(Dispatchers.Main) {
+                                                    Toast.makeText(this@MainActivity, if (ok) "Wallpaper applied to Both!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
+                                                }
+                                            } else {
+                                                saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
+                                                val isOurServiceActive = isAuroraWallpaperActive(this@MainActivity)
+                                                withContext(Dispatchers.Main) {
+                                                    if (isOurServiceActive) {
+                                                        Toast.makeText(this@MainActivity, "Wallpaper updated for Both!", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        checkedPickerReturn = true
+                                                        launchLiveWallpaperPicker(this@MainActivity)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (t: Throwable) {
+                                        Log.e("MainActivity", "Failed to set both wallpaper", t)
+                                    } finally {
+                                        withContext(Dispatchers.Main) {
+                                            isSettingWallpaper = false
                                         }
                                     }
                                 }
-                                navController.popBackStack("home", false)
                             },
                             onDismiss = {
                                 cleanupStagingFiles(this@MainActivity)
