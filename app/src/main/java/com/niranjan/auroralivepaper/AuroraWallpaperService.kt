@@ -180,18 +180,16 @@ class AuroraWallpaperService : WallpaperService() {
 
         private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             try {
+                if (key == "scaling_mode") {
+                    val newScaling = getScalingMode()
+                    currentLoadedScalingMode = newScaling
+                    if (mediaPlayer != null && isPrepared) {
+                        mediaPlayer?.let { applyVideoScalingMode(it) }
+                    }
+                }
                 updatePlayerSettings()
                 refreshPowerState()
                 updatePlaybackState()
-                if (key == "scaling_mode") {
-                    val newScaling = getScalingMode()
-                    if (newScaling != currentLoadedScalingMode) {
-                        currentLoadedScalingMode = newScaling
-                        if (mediaPlayer != null && isPrepared) {
-                            mediaPlayer?.let { applyVideoScalingMode(it) }
-                        }
-                    }
-                }
             } catch (e: Throwable) {
                 recoverPlayer("settingsListener error: ${e.message}")
             }
@@ -354,7 +352,6 @@ class AuroraWallpaperService : WallpaperService() {
                 val savedScaling = getScalingMode()
                 val needsReload = (savedPath != currentLoadedPath) ||
                         (savedVersion != currentLoadedVersion) ||
-                        (savedScaling != currentLoadedScalingMode) ||
                         (mediaPlayer == null && gifMovie == null)
 
                 if (needsReload) {
@@ -435,7 +432,6 @@ class AuroraWallpaperService : WallpaperService() {
                         val savedScaling = getScalingMode()
                         val needsReload = (savedPath != currentLoadedPath) ||
                                 (savedVersion != currentLoadedVersion) ||
-                                (savedScaling != currentLoadedScalingMode) ||
                                 (mediaPlayer == null && gifMovie == null)
 
                         if (needsReload) {
@@ -646,7 +642,6 @@ class AuroraWallpaperService : WallpaperService() {
                     val savedScaling = getScalingMode()
                     val needsReload = (savedPath != currentLoadedPath) ||
                             (savedVersion != currentLoadedVersion) ||
-                            (savedScaling != currentLoadedScalingMode) ||
                             (mediaPlayer == null && gifMovie == null)
 
                     if (needsReload && currentHolder?.surface?.isValid == true && !gifRunning) {
