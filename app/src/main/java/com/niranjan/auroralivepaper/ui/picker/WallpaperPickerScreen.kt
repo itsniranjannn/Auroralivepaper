@@ -12,6 +12,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Movie
 import android.media.MediaCodec
 import android.media.MediaExtractor
@@ -86,6 +87,7 @@ import com.niranjan.auroralivepaper.ui.theme.AuroraRoyalViolet
 import com.niranjan.auroralivepaper.ui.theme.AuroraStormyTeal
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import com.niranjan.auroralivepaper.util.InstagramExtractResult
+import com.niranjan.auroralivepaper.util.MediaValidator
 import com.niranjan.auroralivepaper.util.WebVideoExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -233,12 +235,27 @@ fun WallpaperPickerScreen(
         }
     }
 
+    var pendingValidationMedia by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var validationWarnings by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    val handleMediaSelected: (String, String) -> Unit = { stagingPath, type ->
+        scope.launch {
+            val warnings = validateStagedMedia(context, stagingPath, type)
+            if (warnings.isNotEmpty()) {
+                pendingValidationMedia = Pair(stagingPath, type)
+                validationWarnings = warnings
+            } else {
+                onPreview(stagingPath, type)
+            }
+        }
+    }
+
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
             val stagingPath = copyMediaToAppStorage(context, it, "staging_wallpaper_image.jpg")
-            onPreview(stagingPath, "image")
+            handleMediaSelected(stagingPath, "image")
         }
     }
 
@@ -247,7 +264,7 @@ fun WallpaperPickerScreen(
     ) { uri: Uri? ->
         uri?.let {
             val stagingPath = copyMediaToAppStorage(context, it, "staging_wallpaper_video.mp4")
-            onPreview(stagingPath, "video")
+            handleMediaSelected(stagingPath, "video")
         }
     }
 
@@ -256,7 +273,7 @@ fun WallpaperPickerScreen(
     ) { uri: Uri? ->
         uri?.let {
             val stagingPath = copyMediaToAppStorage(context, it, "staging_wallpaper_gif.gif")
-            onPreview(stagingPath, "gif")
+            handleMediaSelected(stagingPath, "gif")
         }
     }
 
@@ -287,7 +304,7 @@ fun WallpaperPickerScreen(
                             }
                             val ext = if (type == "gif") "gif" else if (type == "image") "jpg" else "mp4"
                             val stagingPath = copyMediaToAppStorage(context, uri, "staging_drag_drop.$ext")
-                            onPreview(stagingPath, type)
+                            handleMediaSelected(stagingPath, type)
                             return true
                         }
                     }
@@ -753,7 +770,7 @@ fun WallpaperPickerScreen(
 
                                 withContext(Dispatchers.Main) {
                                     showUrlDialog = false
-                                    onPreview(stagingFile.absolutePath, finalType)
+                                    handleMediaSelected(stagingFile.absolutePath, finalType)
                                 }
                             } catch (e: Exception) {
                                 tempFile?.delete()
@@ -765,8 +782,127 @@ fun WallpaperPickerScreen(
                     }
                 )
             }
+
+            if (pendingValidationMedia != null && validationWarnings.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = {
+                        pendingValidationMedia?.first?.let { File(it).delete() }
+                        pendingValidationMedia = null
+                        validationWarnings = emptyList()
+                    },
+                    title = {
+                        Text("Media Warning", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                "This media file has parameters that may affect performance:",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontFamily = ManropeFamily,
+                                fontSize = 13.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            validationWarnings.forEach { warning ->
+                                Text(
+                                    "• $warning",
+                                    color = Color(0xFFFFB74D),
+                                    fontFamily = ManropeFamily,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val (path, type) = pendingValidationMedia!!
+                                pendingValidationMedia = null
+                                validationWarnings = emptyList()
+                                onPreview(path, type)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00B894))
+                        ) {
+                            Text("Use anyway", fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                pendingValidationMedia?.first?.let { File(it).delete() }
+                                pendingValidationMedia = null
+                                validationWarnings = emptyList()
+                            }
+                        ) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily)
+                        }
+                    },
+                    containerColor = Color(0xFF141A29),
+                    shape = RoundedCornerShape(20.dp)
+                )
+            }
         }
     }
+
+suspend fun validateStagedMedia(context: Context, stagingPath: String, mediaType: String): List<String> = withContext(Dispatchers.IO) {
+    var width = 0
+    var height = 0
+    var fps = 0f
+    var durationMs = 0L
+    val file = File(stagingPath)
+    val sizeBytes = if (file.exists()) file.length() else 0L
+
+    var retriever: MediaMetadataRetriever? = null
+    var extractor: MediaExtractor? = null
+
+    try {
+        if (mediaType == "image") {
+            val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(stagingPath, options)
+            width = options.outWidth
+            height = options.outHeight
+        } else {
+            retriever = MediaMetadataRetriever()
+            retriever.setDataSource(stagingPath)
+
+            val wStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+            val hStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+
+            width = wStr?.toIntOrNull() ?: 0
+            height = hStr?.toIntOrNull() ?: 0
+            durationMs = durStr?.toLongOrNull() ?: 0L
+
+            if (mediaType == "video") {
+                try {
+                    extractor = MediaExtractor()
+                    extractor.setDataSource(stagingPath)
+                    for (i in 0 until extractor.trackCount) {
+                        val format = extractor.getTrackFormat(i)
+                        val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                        if (mime.startsWith("video/")) {
+                            if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
+                                fps = try {
+                                    format.getInteger(MediaFormat.KEY_FRAME_RATE).toFloat()
+                                } catch (_: Throwable) {
+                                    format.getFloat(MediaFormat.KEY_FRAME_RATE)
+                                }
+                            }
+                            break
+                        }
+                    }
+                } catch (_: Throwable) {}
+            }
+        }
+    } catch (_: Throwable) {
+        // If metadata cannot be read, continue silently
+    } finally {
+        try { retriever?.release() } catch (_: Throwable) {}
+        try { extractor?.release() } catch (_: Throwable) {}
+    }
+
+    MediaValidator.evaluate(width, height, fps, durationMs, sizeBytes)
+}
 
 private fun detectRealFileType(file: File): String? {
     if (!file.exists() || file.length() < 12) return null
@@ -1330,23 +1466,58 @@ fun isSamsungVideoLockAvailable(context: Context): Boolean {
 fun isAuroraWallpaperActive(context: Context): Boolean {
     return try {
         val wm = WallpaperManager.getInstance(context)
-        val info = wm.wallpaperInfo
-        info != null &&
-                info.packageName == context.packageName &&
-                info.serviceName == AuroraWallpaperService::class.java.name
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val homeInfo = wm.getWallpaperInfo(WallpaperManager.FLAG_SYSTEM)
+            val lockInfo = wm.getWallpaperInfo(WallpaperManager.FLAG_LOCK)
+
+            val isHome = homeInfo != null &&
+                    homeInfo.packageName == context.packageName &&
+                    homeInfo.serviceName == AuroraWallpaperService::class.java.name
+
+            val isLock = lockInfo != null &&
+                    lockInfo.packageName == context.packageName &&
+                    lockInfo.serviceName == AuroraWallpaperService::class.java.name
+
+            isHome || isLock
+        } else {
+            val info = wm.wallpaperInfo
+            info != null &&
+                    info.packageName == context.packageName &&
+                    info.serviceName == AuroraWallpaperService::class.java.name
+        }
     } catch (_: Throwable) {
         false
     }
 }
 
 fun applyImageWallpaper(context: Context, imagePath: String, flags: Int, scalingMode: String = "fill"): Boolean {
+    var bitmap: Bitmap? = null
+    var resultBitmap: Bitmap? = null
     return try {
-        val bitmap = BitmapFactory.decodeFile(imagePath) ?: return false
-        val wm = WallpaperManager.getInstance(context)
         val dm = context.resources.displayMetrics
         val screenW = dm.widthPixels
         val screenH = dm.heightPixels
-        val resultBitmap = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
+
+        val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(imagePath, boundsOptions)
+        val origW = boundsOptions.outWidth
+        val origH = boundsOptions.outHeight
+        if (origW <= 0 || origH <= 0) return false
+
+        val targetW = screenW * 2
+        val targetH = screenH * 2
+        var sampleSize = 1
+        while ((origW / sampleSize) > targetW || (origH / sampleSize) > targetH) {
+            sampleSize *= 2
+        }
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+        }
+        bitmap = BitmapFactory.decodeFile(imagePath, decodeOptions) ?: return false
+
+        val wm = WallpaperManager.getInstance(context)
+        resultBitmap = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(resultBitmap)
         canvas.drawColor(android.graphics.Color.BLACK)
 
@@ -1363,12 +1534,13 @@ fun applyImageWallpaper(context: Context, imagePath: String, flags: Int, scaling
         }
         canvas.drawBitmap(bitmap, matrix, null)
         wm.setBitmap(resultBitmap, null, true, flags)
-        resultBitmap.recycle()
-        bitmap.recycle()
         true
-    } catch (e: Exception) {
-        Log.w("Aurora", "Failed to apply image wallpaper", e)
+    } catch (t: Throwable) {
+        Log.w("Aurora", "Failed to apply image wallpaper", t)
         false
+    } finally {
+        try { bitmap?.recycle() } catch (_: Throwable) {}
+        try { resultBitmap?.recycle() } catch (_: Throwable) {}
     }
 }
 
@@ -1792,21 +1964,45 @@ fun applyLockScreenFromVideo(context: Context, videoPath: String, seconds: Float
 }
 
 fun applyLockScreenFromGif(context: Context, gifPath: String): Boolean {
+    var gifBitmap: Bitmap? = null
+    var resultBitmap: Bitmap? = null
     return try {
-        val movie = Movie.decodeStream(FileInputStream(gifPath))
-        if (movie != null) {
-            val w = if (movie.width() > 0) movie.width() else 720
-            val h = if (movie.height() > 0) movie.height() else 1280
-            val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            movie.setTime(0)
-            movie.draw(canvas, 0f, 0f)
-            WallpaperManager.getInstance(context)
-                .setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK)
-            true
-        } else false
-    } catch (e: Exception) {
-        Log.e("AuroraPicker", "applyLockScreenFromGif failed", e)
+        val movie = FileInputStream(gifPath).use { stream ->
+            Movie.decodeStream(stream)
+        } ?: return false
+
+        val gifW = if (movie.width() > 0) movie.width() else 720
+        val gifH = if (movie.height() > 0) movie.height() else 1280
+        val dm = context.resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+
+        gifBitmap = Bitmap.createBitmap(gifW, gifH, Bitmap.Config.ARGB_8888)
+        val gifCanvas = Canvas(gifBitmap)
+        movie.setTime(0)
+        movie.draw(gifCanvas, 0f, 0f)
+
+        resultBitmap = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
+        val resultCanvas = Canvas(resultBitmap)
+        resultCanvas.drawColor(android.graphics.Color.BLACK)
+
+        val scale = maxOf(screenW.toFloat() / gifW, screenH.toFloat() / gifH)
+        val dx = (screenW - gifW * scale) / 2f
+        val dy = (screenH - gifH * scale) / 2f
+        val matrix = Matrix().apply {
+            postScale(scale, scale)
+            postTranslate(dx, dy)
+        }
+        resultCanvas.drawBitmap(gifBitmap, matrix, null)
+
+        WallpaperManager.getInstance(context)
+            .setBitmap(resultBitmap, null, true, WallpaperManager.FLAG_LOCK)
+        true
+    } catch (t: Throwable) {
+        Log.e("AuroraPicker", "applyLockScreenFromGif failed", t)
         false
+    } finally {
+        try { gifBitmap?.recycle() } catch (_: Throwable) {}
+        try { resultBitmap?.recycle() } catch (_: Throwable) {}
     }
 }
