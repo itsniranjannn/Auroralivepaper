@@ -29,7 +29,6 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
 
     var playSound by remember { mutableStateOf(SettingsPrefs.playWallpaperSound(context)) }
     var volume by remember { mutableStateOf(SettingsPrefs.wallpaperVolume(context)) }
-    var resolution by remember { mutableStateOf(SettingsPrefs.resolutionMode(context)) }
     var scalingMode by remember { mutableStateOf(SettingsPrefs.scalingMode(context)) }
     var loopAuto by remember { mutableStateOf(SettingsPrefs.loopAutomatically(context)) }
 
@@ -40,7 +39,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                 .padding(20.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            SettingsHeader(Icons.Filled.VideoLibrary, "Wallpaper", "Control playback, resolution, and audio.", onBack)
+            SettingsHeader(Icons.Filled.VideoLibrary, "Wallpaper", "Control playback, scaling, and audio.", onBack)
 
             SettingsSection("Playback") {
                 CheckRow("Loop automatically", loopAuto) {
@@ -130,32 +129,6 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "Fill zooms to eliminate black bars. Fit displays the full original video without cropping any edges.",
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontFamily = ManropeFamily,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-            }
-
-            SettingsSection("Resolution Cap") {
-                RadioRow("Auto (Screen size)", resolution == "auto") {
-                    resolution = "auto"
-                    performAuroraHaptic(context, haptic)
-                    SettingsPrefs.setResolutionMode(context, "auto")
-                }
-                RadioRow("1080p (Max 1920 height)", resolution == "1080p") {
-                    resolution = "1080p"
-                    performAuroraHaptic(context, haptic)
-                    SettingsPrefs.setResolutionMode(context, "1080p")
-                }
-                RadioRow("1440p (Max 2560 height)", resolution == "1440p") {
-                    resolution = "1440p"
-                    performAuroraHaptic(context, haptic)
-                    SettingsPrefs.setResolutionMode(context, "1440p")
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "Limits the render surface size to reduce GPU load. It doesn't change the video file itself.",
                     color = Color.White.copy(alpha = 0.5f),
                     fontFamily = ManropeFamily,
                     fontSize = 12.sp,

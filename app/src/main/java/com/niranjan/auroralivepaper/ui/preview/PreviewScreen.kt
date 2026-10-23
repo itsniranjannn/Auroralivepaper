@@ -37,6 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -68,6 +71,31 @@ fun PreviewScreen(
     var volumeVal by remember { mutableStateOf(SettingsPrefs.wallpaperVolume(context)) }
     var exoPlayerInstance by remember { mutableStateOf<ExoPlayer?>(null) }
     var isUiVisible by remember { mutableStateOf(true) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var wasPlayingBeforePause by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner, exoPlayerInstance) {
+        val observer = LifecycleEventObserver { _, event ->
+            val player = exoPlayerInstance ?: return@LifecycleEventObserver
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> {
+                    wasPlayingBeforePause = player.isPlaying || player.playWhenReady
+                    player.pause()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    if (wasPlayingBeforePause) {
+                        player.play()
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
