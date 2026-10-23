@@ -24,6 +24,7 @@ import android.view.SurfaceHolder
 import androidx.core.content.ContextCompat
 import com.niranjan.auroralivepaper.data.AuroraDebugLogger
 import com.niranjan.auroralivepaper.data.SettingsPrefs
+import com.niranjan.auroralivepaper.util.RecoveryLimiter
 import java.io.File
 import java.io.FileInputStream
 
@@ -69,12 +70,9 @@ class AuroraWallpaperService : WallpaperService() {
         private var reloadOnNextVisible = false
         private var lastPauseReason: String? = null
 
-        private var isRecoveryScheduled = false
-        private val recoveryTimestamps = ArrayDeque<Long>()
-        private var recoverySuppressed = false
-        private var recoveryBackoffIndex = 0
-        private val recoveryBackoffs = listOf(1000L, 2000L, 4000L, 8000L, 30000L)
+        private val recoveryLimiter = RecoveryLimiter()
         private var lastUnlockPollerErrorTime = 0L
+        private var pendingReloadRunnable: Runnable? = null
 
         private val settingsPrefs by lazy {
             applicationContext.getSharedPreferences("aurora_settings_prefs", MODE_PRIVATE)
@@ -84,44 +82,56 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private fun recoverPlayer(reason: String) {
-            if (isRecoveryScheduled) {
-                Log.d("AuroraEngine", "recoverPlayer skipped: recovery already scheduled")
-                return
-            }
-
-            val now = SystemClock.uptimeMillis()
-            while (recoveryTimestamps.isNotEmpty() && (now - recoveryTimestamps.first() > 120_000L)) {
-                recoveryTimestamps.removeFirst()
-            }
-
-            if (recoverySuppressed || recoveryTimestamps.size >= 5) {
-                if (!recoverySuppressed) {
-                    recoverySuppressed = true
+            when (val res = recoveryLimiter.attemptRecovery(SystemClock.uptimeMillis())) {
+                is RecoveryLimiter.Result.AlreadyScheduled -> {
+                    Log.d("AuroraEngine", "recoverPlayer skipped: recovery already scheduled")
+                    return
+                }
+                is RecoveryLimiter.Result.Suppressed -> {
                     AuroraDebugLogger.log(applicationContext, "RECOVERY: suppressed")
+                    return
                 }
-                return
+                is RecoveryLimiter.Result.Scheduled -> {
+                    val delayMs = res.delayMs
+                    AuroraDebugLogger.log(applicationContext, "RECOVERY: recoverPlayer (reason=$reason, delay=${delayMs}ms)")
+                    releasePlayer()
+                    retryCount = 0
+
+                    gifHandler.postDelayed({
+                        recoveryLimiter.onRecoveryDispatched()
+                        currentHolder?.let { holder ->
+                            if (holder.surface.isValid) {
+                                loadWallpaper(holder)
+                            }
+                        }
+                    }, delayMs)
+                }
             }
+        }
 
-            recoveryTimestamps.addLast(now)
-            isRecoveryScheduled = true
-
-            val delayMs = recoveryBackoffs[recoveryBackoffIndex.coerceAtMost(recoveryBackoffs.size - 1)]
-            if (recoveryBackoffIndex < recoveryBackoffs.size - 1) {
-                recoveryBackoffIndex++
-            }
-
-            AuroraDebugLogger.log(applicationContext, "RECOVERY: recoverPlayer (reason=$reason, delay=${delayMs}ms)")
-            releasePlayer()
-            retryCount = 0
-
-            gifHandler.postDelayed({
-                isRecoveryScheduled = false
-                currentHolder?.let { holder ->
-                    if (holder.surface.isValid) {
-                        loadWallpaper(holder)
+        private fun scheduleReload(reason: String) {
+            pendingReloadRunnable?.let { gifHandler.removeCallbacks(it) }
+            val runnable = Runnable {
+                try {
+                    pendingReloadRunnable = null
+                    AuroraDebugLogger.log(applicationContext, "RELOAD: scheduled reload firing (reason=$reason)")
+                    recoveryLimiter.reset()
+                    currentLoadedPath = null
+                    currentLoadedVersion = -1L
+                    currentLoadedScalingMode = null
+                    retryCount = 0
+                    releasePlayer()
+                    currentHolder?.let { holder ->
+                        if (holder.surface.isValid) {
+                            loadWallpaper(holder)
+                        }
                     }
+                } catch (e: Throwable) {
+                    Log.e("AuroraEngine", "Error in scheduleReload runnable", e)
                 }
-            }, delayMs)
+            }
+            pendingReloadRunnable = runnable
+            gifHandler.postDelayed(runnable, 300L)
         }
 
         private val reload60sRunnable = Runnable {
@@ -174,17 +184,11 @@ class AuroraWallpaperService : WallpaperService() {
                 refreshPowerState()
                 updatePlaybackState()
                 if (key == "scaling_mode") {
-                    currentHolder?.let { holder ->
-                        if (holder.surface.isValid) {
-                            val newScaling = getScalingMode()
-                            if (newScaling != currentLoadedScalingMode) {
-                                currentLoadedScalingMode = newScaling
-                                if (mediaPlayer != null && isPrepared) {
-                                    mediaPlayer?.let { applyVideoScalingMode(it) }
-                                } else {
-                                    loadWallpaper(holder)
-                                }
-                            }
+                    val newScaling = getScalingMode()
+                    if (newScaling != currentLoadedScalingMode) {
+                        currentLoadedScalingMode = newScaling
+                        if (mediaPlayer != null && isPrepared) {
+                            mediaPlayer?.let { applyVideoScalingMode(it) }
                         }
                     }
                 }
@@ -195,22 +199,10 @@ class AuroraWallpaperService : WallpaperService() {
 
         private val mediaListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             try {
-                if (key == "media_version" || key == "media_path" || key == "scaling_mode") {
+                if (key == "media_version" || key == "media_path" || key == "media_type") {
                     val savedPath = mediaPrefs.getString("media_path", null)
                     Log.d("AuroraEngine", "media preference changed ($key): reload media from path=$savedPath")
-                    recoverySuppressed = false
-                    recoveryTimestamps.clear()
-                    recoveryBackoffIndex = 0
-                    currentLoadedPath = null
-                    currentLoadedVersion = -1L
-                    currentLoadedScalingMode = null
-                    retryCount = 0
-                    releasePlayer()
-                    currentHolder?.let { holder ->
-                        if (holder.surface.isValid) {
-                            loadWallpaper(holder)
-                        }
-                    }
+                    scheduleReload("mediaListener key=$key")
                 }
             } catch (e: Throwable) {
                 recoverPlayer("mediaListener error: ${e.message}")
@@ -271,19 +263,32 @@ class AuroraWallpaperService : WallpaperService() {
                 try {
                     if (intent == null) return
                     if (intent.action == ACTION_RELOAD_WALLPAPER) {
-                        Log.d("AuroraEngine", "ACTION_RELOAD_WALLPAPER broadcast received")
-                        recoverySuppressed = false
-                        recoveryTimestamps.clear()
-                        recoveryBackoffIndex = 0
-                        currentLoadedPath = null
-                        currentLoadedVersion = -1L
-                        currentLoadedScalingMode = null
-                        retryCount = 0
-                        releasePlayer()
-                        currentHolder?.let { holder ->
-                            if (holder.surface.isValid) {
-                                loadWallpaper(holder)
+                        if (!intent.hasExtra("media_path")) {
+                            // Scaling-only broadcast from SettingsPrefs.setScalingMode
+                            Log.d("AuroraEngine", "ACTION_RELOAD_WALLPAPER: scaling-only")
+                            val newScaling = getScalingMode()
+                            currentLoadedScalingMode = newScaling
+                            if (mediaPlayer != null && isPrepared) {
+                                mediaPlayer?.let { applyVideoScalingMode(it) }
                             }
+                            if (gifMovie == null && mediaPlayer == null) {
+                                currentHolder?.let { holder ->
+                                    if (holder.surface.isValid) {
+                                        val savedPath = mediaPrefs.getString("media_path", null)
+                                        if (savedPath != null && File(savedPath).exists()) {
+                                            val mediaType = mediaPrefs.getString("media_type", "video")
+                                            if (mediaType == "image") {
+                                                drawImage(savedPath, holder)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            AuroraDebugLogger.log(applicationContext, "SCALING: applied scaling-only change to $newScaling")
+                        } else {
+                            // Full reload broadcast with media_path
+                            Log.d("AuroraEngine", "ACTION_RELOAD_WALLPAPER: full reload")
+                            scheduleReload("reloadReceiver full broadcast")
                         }
                     }
                 } catch (e: Throwable) {
@@ -327,7 +332,7 @@ class AuroraWallpaperService : WallpaperService() {
                 super.onDestroy()
                 Log.d("AuroraEngine", "Engine.onDestroy: isPreview=$isPreview")
                 gifHandler.removeCallbacksAndMessages(null)
-                isRecoveryScheduled = false
+                recoveryLimiter.reset()
                 unregisterReceivers()
                 settingsPrefs.unregisterOnSharedPreferenceChangeListener(settingsListener)
                 mediaPrefs.unregisterOnSharedPreferenceChangeListener(mediaListener)
@@ -388,9 +393,7 @@ class AuroraWallpaperService : WallpaperService() {
                 Log.d("AuroraEngine", "onVisibilityChanged: visible=$visible, isPreview=$isPreview")
                 isVisibleState = visible
                 if (visible) {
-                    recoverySuppressed = false
-                    recoveryTimestamps.clear()
-                    recoveryBackoffIndex = 0
+                    recoveryLimiter.reset()
 
                     val km = applicationContext.getSystemService(KEYGUARD_SERVICE) as? KeyguardManager
                     val isLocked = km?.isKeyguardLocked == true || km?.inKeyguardRestrictedInputMode() == true
@@ -786,7 +789,7 @@ class AuroraWallpaperService : WallpaperService() {
                         try {
                             isPrepared = true
                             retryCount = 0
-                            recoveryBackoffIndex = 0
+                            recoveryLimiter.resetBackoff()
                             applyVideoScalingMode(mp)
                             updatePlayerSettings()
                             updatePlaybackState()

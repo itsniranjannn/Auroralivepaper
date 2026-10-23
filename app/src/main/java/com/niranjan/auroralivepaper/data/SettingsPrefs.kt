@@ -84,9 +84,11 @@ object SettingsPrefs {
     }
 
     /** One of: "auto", "1080p", "1440p", "original" */
+    @Deprecated("Unused: no effect on playback")
     fun resolutionMode(context: Context): String =
         prefs(context).getString(KEY_RESOLUTION_MODE, "auto") ?: "auto"
 
+    @Deprecated("Unused: no effect on playback")
     fun setResolutionMode(context: Context, value: String) {
         prefs(context).edit().putString(KEY_RESOLUTION_MODE, value).apply()
     }
