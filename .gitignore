@@ -1,4 +1,4 @@
-*.iml
+﻿*.iml
 .gradle
 /local.properties
 /.idea/caches
@@ -16,5 +16,3 @@ local.properties
 .kotlin
 keystore.properties
 *.jks
-
-*.md
