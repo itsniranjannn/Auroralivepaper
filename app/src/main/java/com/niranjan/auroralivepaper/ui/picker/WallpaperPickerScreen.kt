@@ -32,9 +32,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -56,12 +58,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -71,7 +78,6 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
 import com.niranjan.auroralivepaper.AuroraWallpaperService
 import com.niranjan.auroralivepaper.data.SettingsPrefs
-import com.niranjan.auroralivepaper.ui.components.AuroraAnimatedBackground
 import com.niranjan.auroralivepaper.ui.components.AuroraGradientText
 import com.niranjan.auroralivepaper.ui.components.PremiumMediaCard
 import com.niranjan.auroralivepaper.ui.settings.performAuroraHaptic
@@ -95,6 +101,13 @@ import java.util.Calendar
 
 data class RecentWallpaper(val path: String, val type: String, val timestamp: Long)
 
+private val SpecularBorderBrush = Brush.linearGradient(
+    listOf(
+        Color.White.copy(alpha = 0.28f),
+        Color.White.copy(alpha = 0.04f)
+    )
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 @UnstableApi
@@ -108,10 +121,27 @@ fun WallpaperPickerScreen(
 
     var status by remember { mutableStateOf("") }
 
-    var showHeader by remember { mutableStateOf(false) }
-    var showHero by remember { mutableStateOf(false) }
-    var showGrid by remember { mutableStateOf(false) }
-    var showRecents by remember { mutableStateOf(false) }
+    // Staggered spring waterfall entrance animatables
+    val headerAlpha = remember { Animatable(0f) }
+    val headerOffsetY = remember { Animatable(-20f) }
+    val settingsRotation = remember { Animatable(45f) }
+
+    val heroAlpha = remember { Animatable(0f) }
+    val heroOffsetY = remember { Animatable(32f) }
+
+    val recentsAlpha = remember { Animatable(0f) }
+    val recentsOffsetX = remember { Animatable(40f) }
+
+    val gridHeaderAlpha = remember { Animatable(0f) }
+    val card0Scale = remember { Animatable(0.92f) }
+    val card0Alpha = remember { Animatable(0f) }
+    val card1Scale = remember { Animatable(0.92f) }
+    val card1Alpha = remember { Animatable(0f) }
+    val card2Scale = remember { Animatable(0.92f) }
+    val card2Alpha = remember { Animatable(0f) }
+    val card3Scale = remember { Animatable(0.92f) }
+    val card3Alpha = remember { Animatable(0f) }
+
     var showUrlDialog by remember { mutableStateOf(false) }
 
     var isDragHovered by remember { mutableStateOf(false) }
@@ -136,15 +166,71 @@ fun WallpaperPickerScreen(
         }
     }
 
-    val isOurWallpaperActive = activeWallpaperInfo != null &&
-            activeWallpaperInfo?.packageName == context.packageName &&
-            activeWallpaperInfo?.serviceName == AuroraWallpaperService::class.java.name
+    val isOurWallpaperActive = isAuroraWallpaperActive(context)
 
     LaunchedEffect(Unit) {
-        delay(40); showHeader = true
-        delay(60); showHero = true
-        delay(80); showGrid = true
-        delay(80); showRecents = true
+        val richMotion = SettingsPrefs.richMotion(context)
+        if (!richMotion) {
+            headerAlpha.snapTo(1f)
+            headerOffsetY.snapTo(0f)
+            settingsRotation.snapTo(0f)
+            heroAlpha.snapTo(1f)
+            heroOffsetY.snapTo(0f)
+            recentsAlpha.snapTo(1f)
+            recentsOffsetX.snapTo(0f)
+            gridHeaderAlpha.snapTo(1f)
+            card0Alpha.snapTo(1f)
+            card0Scale.snapTo(1f)
+            card1Alpha.snapTo(1f)
+            card1Scale.snapTo(1f)
+            card2Alpha.snapTo(1f)
+            card2Scale.snapTo(1f)
+            card3Alpha.snapTo(1f)
+            card3Scale.snapTo(1f)
+        } else {
+            val springSpec = spring<Float>(dampingRatio = 0.78f, stiffness = 200f)
+
+            // Header Row + Settings Gear 45deg rotation
+            launch { headerAlpha.animateTo(1f, tween(240)) }
+            launch { headerOffsetY.animateTo(0f, springSpec) }
+            launch { settingsRotation.animateTo(0f, springSpec) }
+
+            // Hero "Now Playing" card slides up + fades in
+            delay(90)
+            launch { heroAlpha.animateTo(1f, tween(260)) }
+            launch { heroOffsetY.animateTo(0f, springSpec) }
+
+            // "Recent Wallpapers" slides in from right + fades in
+            delay(90)
+            launch { recentsAlpha.animateTo(1f, tween(260)) }
+            launch { recentsOffsetX.animateTo(0f, springSpec) }
+
+            // 2x2 Bento Grid cards scale in with 50ms per-card stagger
+            delay(90)
+            launch { gridHeaderAlpha.animateTo(1f, tween(260)) }
+            launch {
+                card0Alpha.animateTo(1f, tween(260))
+                card0Scale.animateTo(1f, springSpec)
+            }
+
+            delay(50)
+            launch {
+                card1Alpha.animateTo(1f, tween(260))
+                card1Scale.animateTo(1f, springSpec)
+            }
+
+            delay(50)
+            launch {
+                card2Alpha.animateTo(1f, tween(260))
+                card2Scale.animateTo(1f, springSpec)
+            }
+
+            delay(50)
+            launch {
+                card3Alpha.animateTo(1f, tween(260))
+                card3Scale.animateTo(1f, springSpec)
+            }
+        }
     }
 
     val pickImageLauncher = rememberLauncherForActivityResult(
@@ -213,265 +299,292 @@ fun WallpaperPickerScreen(
         }
     }
 
-    AuroraAnimatedBackground {
-        Box(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .dragAndDropTarget(
+                shouldStartDragAndDrop = { true },
+                target = dndTarget
+            )
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .dragAndDropTarget(
-                    shouldStartDragAndDrop = { true },
-                    target = dndTarget
-                )
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.Start
         ) {
-            Column(
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Header Row (t + 0ms)
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.Start
+                    .fillMaxWidth()
+                    .offset(y = headerOffsetY.value.dp)
+                    .alpha(headerAlpha.value),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Header Row
-                AnimatedVisibility(
-                    visible = showHeader,
-                    enter = fadeIn(tween(350)) + slideInVertically(initialOffsetY = { -20 }, animationSpec = tween(350))
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            val greeting = remember {
-                                val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                                when {
-                                    hour < 12 -> "Good Morning"
-                                    hour < 18 -> "Good Afternoon"
-                                    else -> "Good Evening"
-                                }
-                            }
-                            Text(
-                                greeting,
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontFamily = ManropeFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
-                            )
-                            AuroraGradientText("Aurora", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                Column {
+                    val greeting = remember {
+                        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                        when {
+                            hour < 12 -> "Good Morning"
+                            hour < 18 -> "Good Afternoon"
+                            else -> "Good Evening"
                         }
+                    }
+                    Text(
+                        greeting,
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontFamily = ManropeFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                    AuroraGradientText("Aurora", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold)
+                }
 
-                        IconButton(
-                            onClick = {
-                                performAuroraHaptic(context, haptic)
-                                onOpenSettings()
-                            },
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = "Settings",
-                                tint = Color.White.copy(alpha = 0.9f)
+                IconButton(
+                    onClick = {
+                        performAuroraHaptic(context, haptic)
+                        onOpenSettings()
+                    },
+                    modifier = Modifier
+                        .size(42.dp)
+                        .graphicsLayer {
+                            rotationZ = settingsRotation.value
+                        }
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .border(1.dp, SpecularBorderBrush, RoundedCornerShape(14.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        tint = Color.White.copy(alpha = 0.9f)
+                    )
+                }
+            }
+
+            Text(
+                "Every unlock, a little more yours.",
+                color = Color.White.copy(alpha = 0.65f),
+                fontFamily = ManropeFamily,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .offset(y = headerOffsetY.value.dp)
+                    .alpha(headerAlpha.value)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Hero "Now Playing" Card (t + 90ms)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = heroOffsetY.value.dp)
+                    .alpha(heroAlpha.value)
+            ) {
+                HeroNowPlayingCard(
+                    activePath = if (isOurWallpaperActive) activePath else null,
+                    activeType = activeType ?: "video",
+                    onClick = {
+                        val path = activePath
+                        if (path != null && File(path).exists()) {
+                            performAuroraHaptic(context, haptic)
+                            onPreview(path, activeType ?: "video")
+                        }
+                    },
+                    onClear = {
+                        performAuroraHaptic(context, haptic)
+                        activePath?.let { File(it).delete() }
+                        val version = System.currentTimeMillis()
+                        prefs.edit().remove("media_path").remove("media_type").putLong("media_version", version).apply()
+                        try {
+                            val reloadIntent = Intent(com.niranjan.auroralivepaper.AuroraWallpaperService.ACTION_RELOAD_WALLPAPER).apply {
+                                setPackage(context.packageName)
+                                putExtra("media_version", version)
+                            }
+                            context.sendBroadcast(reloadIntent)
+                        } catch (_: Exception) {}
+                        activePath = null
+                        status = "Wallpaper cleared"
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Drag and drop dropzone banner
+            if (isDragHovered) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(70.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
+                        .border(2.dp, Color(0xFF7CE7D7), RoundedCornerShape(18.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Drop wallpaper file here",
+                        color = Color(0xFF7CE7D7),
+                        fontFamily = ManropeFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Recent Wallpapers Row (t + 180ms)
+            if (recentsList.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset(x = recentsOffsetX.value.dp)
+                        .alpha(recentsAlpha.value)
+                ) {
+                    Text(
+                        "Recent Wallpapers",
+                        color = Color.White.copy(alpha = 0.88f),
+                        fontFamily = ManropeFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        recentsList.forEach { recent ->
+                            RecentCard(
+                                recent = recent,
+                                onClick = {
+                                    performAuroraHaptic(context, haptic)
+                                    if (File(recent.path).exists()) {
+                                        onPreview(recent.path, recent.type)
+                                    } else {
+                                        status = "Media file no longer available"
+                                    }
+                                },
+                                onDelete = {
+                                    performAuroraHaptic(context, haptic)
+                                    removeRecentWallpaper(context, recent.path)
+                                    recentsList = getRecentWallpapers(context)
+                                }
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(14.dp))
                 }
+            }
 
-                Text(
-                    "Every unlock, a little more yours.",
-                    color = Color.White.copy(alpha = 0.65f),
-                    fontFamily = ManropeFamily,
-                    fontSize = 12.sp
-                )
+            // Choose Wallpaper Grid Section Header (t + 270ms)
+            Text(
+                "Choose Wallpaper",
+                color = Color.White.copy(alpha = 0.88f),
+                fontFamily = ManropeFamily,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                modifier = Modifier.alpha(gridHeaderAlpha.value)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Hero "Now Playing" Card
-                AnimatedVisibility(
-                    visible = showHero,
-                    enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400))
+            // 2x2 Bento Grid Cards with Staggered Entrance & Semantic Accents
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    HeroNowPlayingCard(
-                        activePath = if (isOurWallpaperActive) activePath else null,
-                        activeType = activeType ?: "video",
+                    PremiumMediaCard(
+                        label = "Video",
+                        subtitle = "MP4 · MOV · WEBM",
+                        icon = Icons.Filled.MovieFilter,
+                        accent = Color(0xFF9D4EDD), // Electric Violet
+                        modifier = Modifier
+                            .weight(1f)
+                            .graphicsLayer {
+                                scaleX = card0Scale.value
+                                scaleY = card0Scale.value
+                                alpha = card0Alpha.value
+                            },
                         onClick = {
-                            val path = activePath
-                            if (path != null && File(path).exists()) {
-                                performAuroraHaptic(context, haptic)
-                                onPreview(path, activeType ?: "video")
-                            }
-                        },
-                        onClear = {
                             performAuroraHaptic(context, haptic)
-                            activePath?.let { File(it).delete() }
-                            val version = System.currentTimeMillis()
-                            prefs.edit().remove("media_path").remove("media_type").putLong("media_version", version).apply()
-                            try {
-                                val reloadIntent = Intent(com.niranjan.auroralivepaper.AuroraWallpaperService.ACTION_RELOAD_WALLPAPER).apply {
-                                    setPackage(context.packageName)
-                                    putExtra("media_version", version)
-                                }
-                                context.sendBroadcast(reloadIntent)
-                            } catch (_: Exception) {}
-                            activePath = null
-                            status = "Wallpaper cleared"
+                            pickVideoLauncher.launch(arrayOf("video/*"))
+                        }
+                    )
+                    PremiumMediaCard(
+                        label = "GIF",
+                        subtitle = "Animated GIF",
+                        icon = Icons.Filled.Gif,
+                        accent = Color(0xFF00F5D4), // Bioluminescent Cyan
+                        modifier = Modifier
+                            .weight(1f)
+                            .graphicsLayer {
+                                scaleX = card1Scale.value
+                                scaleY = card1Scale.value
+                                alpha = card1Alpha.value
+                            },
+                        onClick = {
+                            performAuroraHaptic(context, haptic)
+                            pickGifLauncher.launch(arrayOf("image/gif"))
                         }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Drag and drop dropzone banner
-                if (isDragHovered) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(70.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
-                            .border(2.dp, Color(0xFF7CE7D7), RoundedCornerShape(18.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Drop wallpaper file here",
-                            color = Color(0xFF7CE7D7),
-                            fontFamily = ManropeFamily,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
-
-                // Recent Wallpapers Row (if any exist)
-                if (recentsList.isNotEmpty()) {
-                    AnimatedVisibility(
-                        visible = showRecents,
-                        enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { 30 }, animationSpec = tween(400))
-                    ) {
-                        Column {
-                            Text(
-                                "Recent Wallpapers",
-                                color = Color.White.copy(alpha = 0.88f),
-                                fontFamily = ManropeFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                recentsList.forEach { recent ->
-                                    RecentCard(
-                                        recent = recent,
-                                        onClick = {
-                                            performAuroraHaptic(context, haptic)
-                                            if (File(recent.path).exists()) {
-                                                onPreview(recent.path, recent.type)
-                                            } else {
-                                                status = "Media file no longer available"
-                                            }
-                                        },
-                                        onDelete = {
-                                            performAuroraHaptic(context, haptic)
-                                            removeRecentWallpaper(context, recent.path)
-                                            recentsList = getRecentWallpapers(context)
-                                        }
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                        }
-                    }
-                }
-
-                // Upload Grid Section Header directly above cards
-                Text(
-                    "Choose Wallpaper",
-                    color = Color.White.copy(alpha = 0.88f),
-                    fontFamily = ManropeFamily,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Compact 2x2 Grid Cards
-                AnimatedVisibility(
-                    visible = showGrid,
-                    enter = fadeIn(tween(450)) + slideInVertically(initialOffsetY = { 35 }, animationSpec = tween(450))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            PremiumMediaCard(
-                                label = "Video",
-                                subtitle = "MP4 · MOV · WEBM",
-                                icon = Icons.Filled.MovieFilter,
-                                accent = AuroraRoyalViolet,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    performAuroraHaptic(context, haptic)
-                                    pickVideoLauncher.launch(arrayOf("video/*"))
-                                }
-                            )
-                            PremiumMediaCard(
-                                label = "GIF",
-                                subtitle = "Animated GIF",
-                                icon = Icons.Filled.Gif,
-                                accent = AuroraStormyTeal,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    performAuroraHaptic(context, haptic)
-                                    pickGifLauncher.launch(arrayOf("image/gif"))
-                                }
-                            )
+                    PremiumMediaCard(
+                        label = "Image",
+                        subtitle = "JPG · PNG · WEBP",
+                        icon = Icons.Filled.Add,
+                        accent = Color(0xFF00BFA5), // Emerald Mint
+                        modifier = Modifier
+                            .weight(1f)
+                            .graphicsLayer {
+                                scaleX = card2Scale.value
+                                scaleY = card2Scale.value
+                                alpha = card2Alpha.value
+                            },
+                        onClick = {
+                            performAuroraHaptic(context, haptic)
+                            pickImageLauncher.launch(arrayOf("image/*"))
                         }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            PremiumMediaCard(
-                                label = "Image",
-                                subtitle = "JPG · PNG · WEBP",
-                                icon = Icons.Filled.Add,
-                                accent = AuroraFrostedBlue,
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    performAuroraHaptic(context, haptic)
-                                    pickImageLauncher.launch(arrayOf("image/*"))
-                                }
-                            )
-                            PremiumMediaCard(
-                                label = "URL Upload",
-                                subtitle = "Direct Link · Media",
-                                icon = Icons.Filled.CloudDownload,
-                                accent = Color(0xFF93B5FF),
-                                modifier = Modifier.weight(1f),
-                                onClick = {
-                                    performAuroraHaptic(context, haptic)
-                                    showUrlDialog = true
-                                }
-                            )
+                    )
+                    PremiumMediaCard(
+                        label = "URL Upload",
+                        subtitle = "Direct Link · Media",
+                        icon = Icons.Filled.CloudDownload,
+                        accent = Color(0xFF4EA8DE), // Sky Indigo
+                        modifier = Modifier
+                            .weight(1f)
+                            .graphicsLayer {
+                                scaleX = card3Scale.value
+                                scaleY = card3Scale.value
+                                alpha = card3Alpha.value
+                            },
+                        onClick = {
+                            performAuroraHaptic(context, haptic)
+                            showUrlDialog = true
                         }
-                    }
+                    )
                 }
+            }
 
-                if (status.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(status, color = Color.White.copy(alpha = 0.85f), fontFamily = ManropeFamily, fontSize = 12.sp)
-                }
+            if (status.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(status, color = Color.White.copy(alpha = 0.85f), fontFamily = ManropeFamily, fontSize = 12.sp)
+            }
 
-                Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             }
 
             if (showUrlDialog) {
@@ -609,8 +722,9 @@ fun WallpaperPickerScreen(
                                 }
 
                                 val ext = if (finalType == "gif") "gif" else if (finalType == "video") "mp4" else "jpg"
-                                val stagingFile = File(context.filesDir, "staging_url_wallpaper.$ext")
-                                tempFile.renameTo(stagingFile)
+                                val stagingFile = File(context.filesDir, "staging_url_${System.currentTimeMillis()}.$ext")
+                                tempFile.copyTo(stagingFile, overwrite = true)
+                                tempFile.delete()
 
                                 if (finalType == "video") {
                                     val retriever = MediaMetadataRetriever()
@@ -653,7 +767,6 @@ fun WallpaperPickerScreen(
             }
         }
     }
-}
 
 private fun detectRealFileType(file: File): String? {
     if (!file.exists() || file.length() < 12) return null
@@ -696,14 +809,48 @@ private fun HeroNowPlayingCard(
     val context = LocalContext.current
     val richMotion = remember(context) { SettingsPrefs.richMotion(context) }
 
-    val infinite = rememberInfiniteTransition(label = "badgePulse")
-    val animatedPulseAlpha by infinite.animateFloat(
-        initialValue = 0.4f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "pulseAlpha"
-    )
+    val posterBitmap by produceState<Bitmap?>(initialValue = null, key1 = activePath) {
+        value = withContext(Dispatchers.IO) {
+            if (activePath != null && File(activePath).exists()) {
+                try {
+                    if (activeType == "image") {
+                        val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                        BitmapFactory.decodeFile(activePath, opts)
+                    } else {
+                        val mmr = MediaMetadataRetriever()
+                        mmr.setDataSource(activePath)
+                        val bm = mmr.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: mmr.getFrameAtTime(0L)
+                        mmr.release()
+                        bm
+                    }
+                } catch (_: Throwable) {
+                    null
+                }
+            } else {
+                null
+            }
+        }
+    }
 
-    val pulseAlpha = if (richMotion) animatedPulseAlpha else 1f
+    val infinite = rememberInfiniteTransition("badgePulse")
+    val pulseRingScale by infinite.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 2.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulseRingScale"
+    )
+    val pulseRingAlpha by infinite.animateFloat(
+        initialValue = 0.75f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulseRingAlpha"
+    )
 
     Box(
         modifier = Modifier
@@ -711,24 +858,59 @@ private fun HeroNowPlayingCard(
             .clip(RoundedCornerShape(22.dp))
             .background(
                 Brush.linearGradient(
-                    colors = listOf(
+                    listOf(
                         AuroraRoyalViolet.copy(alpha = 0.22f),
-                        Color.Transparent,
+                        Color(0xFF0D111E).copy(alpha = 0.40f),
                         AuroraStormyTeal.copy(alpha = 0.18f)
                     )
                 )
             )
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
-            .clickable(enabled = activePath != null && File(activePath).exists(), onClick = onClick)
-            .padding(16.dp)
+            .border(1.dp, SpecularBorderBrush, RoundedCornerShape(22.dp))
+            .clickable(
+                enabled = activePath != null && File(activePath).exists(),
+                onClick = onClick
+            )
     ) {
-        Column {
+        if (posterBitmap != null) {
+            Image(
+                bitmap = posterBitmap!!.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .matchParentSize()
+                    .alpha(0.22f)
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF07090F).copy(alpha = 0.45f),
+                                Color(0xFF07090F).copy(alpha = 0.80f)
+                            )
+                        )
+                    )
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Now Playing", color = Color.White.copy(alpha = 0.65f), fontFamily = ManropeFamily, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Now Playing",
+                    color = Color.White.copy(alpha = 0.65f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
+                )
 
                 if (activePath != null && File(activePath).exists()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -736,18 +918,42 @@ private fun HeroNowPlayingCard(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
-                                .border(1.dp, Color(0xFF7CE7D7).copy(alpha = 0.4f), RoundedCornerShape(50))
+                                .background(Color(0xFF00BFA5).copy(alpha = 0.15f))
+                                .border(1.dp, Color(0xFF00BFA5).copy(alpha = 0.40f), RoundedCornerShape(50))
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF7CE7D7).copy(alpha = pulseAlpha))
+                                modifier = Modifier.size(10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (richMotion) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(5.dp)
+                                            .graphicsLayer {
+                                                scaleX = pulseRingScale
+                                                scaleY = pulseRingScale
+                                                alpha = pulseRingAlpha
+                                            }
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF00BFA5))
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF00BFA5))
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                "Active",
+                                color = Color(0xFF00BFA5),
+                                fontFamily = ManropeFamily,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Active", color = Color(0xFF7CE7D7), fontFamily = ManropeFamily, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(modifier = Modifier.width(6.dp))
@@ -769,17 +975,14 @@ private fun HeroNowPlayingCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (activePath == null || !File(activePath).exists()) {
-                Text("No live wallpaper active", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text("Choose a video, GIF, or image below to bring your screen to life.", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 11.sp)
-            } else {
+            if (activePath != null && File(activePath).exists()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.08f)),
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         val icon = when (activeType) {
@@ -787,7 +990,7 @@ private fun HeroNowPlayingCard(
                             "image" -> Icons.Filled.Add
                             else -> Icons.Filled.Videocam
                         }
-                        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(20.dp))
+                        Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.95f), modifier = Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -799,10 +1002,50 @@ private fun HeroNowPlayingCard(
                             fontSize = 15.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.6f), fontFamily = ManropeFamily, fontSize = 11.sp)
+                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.65f), fontFamily = ManropeFamily, fontSize = 11.sp)
                     }
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.6f))
+
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.06f))
+                                )
+                            )
+                            .border(
+                                1.dp,
+                                Brush.linearGradient(
+                                    listOf(Color.White.copy(alpha = 0.45f), Color.White.copy(alpha = 0.08f))
+                                ),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = "Preview",
+                            tint = Color.White,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
                 }
+            } else {
+                Text(
+                    "No live wallpaper active",
+                    color = Color.White,
+                    fontFamily = ManropeFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    "Choose a video, GIF, or image below to bring your screen to life.",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 11.sp
+                )
             }
         }
     }
@@ -814,16 +1057,70 @@ private fun RecentCard(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val thumbnailBitmap by produceState<Bitmap?>(initialValue = null, key1 = recent.path) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                val file = File(recent.path)
+                if (!file.exists()) return@withContext null
+                if (recent.type == "image") {
+                    val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+                    BitmapFactory.decodeFile(recent.path, opts)
+                } else {
+                    val mmr = MediaMetadataRetriever()
+                    mmr.setDataSource(recent.path)
+                    val frame = mmr.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: mmr.getFrameAtTime(0L)
+                    mmr.release()
+                    frame
+                }
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
-            .width(105.dp)
+            .width(110.dp)
+            .height(115.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.06f))
-            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .background(Color(0xFF141922))
+            .border(1.dp, SpecularBorderBrush, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(10.dp)
     ) {
-        Column(horizontalAlignment = Alignment.Start) {
+        if (thumbnailBitmap != null) {
+            Image(
+                bitmap = thumbnailBitmap!!.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.15f),
+                                Color(0xFF07090F).copy(alpha = 0.80f)
+                            )
+                        )
+                    )
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.White.copy(alpha = 0.05f))
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.Start
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -831,9 +1128,9 @@ private fun RecentCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.08f)),
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.45f)),
                     contentAlignment = Alignment.Center
                 ) {
                     val icon = when (recent.type) {
@@ -841,7 +1138,12 @@ private fun RecentCard(
                         "image" -> Icons.Filled.Add
                         else -> Icons.Filled.MovieFilter
                     }
-                    Icon(icon, contentDescription = null, tint = Color.White.copy(alpha = 0.85f), modifier = Modifier.size(16.dp))
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.9f),
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
 
                 IconButton(
@@ -850,29 +1152,29 @@ private fun RecentCard(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
-                        contentDescription = "Remove recent",
-                        tint = Color.White.copy(alpha = 0.4f),
+                        contentDescription = "Delete",
+                        tint = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(13.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = recent.type.uppercase(),
-                color = Color.White,
-                fontFamily = ManropeFamily,
-                fontWeight = FontWeight.Bold,
-                fontSize = 11.sp
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Re-apply",
-                color = Color(0xFF7CE7D7),
-                fontFamily = ManropeFamily,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Column {
+                Text(
+                    text = recent.type.uppercase(),
+                    color = Color.White,
+                    fontFamily = ManropeFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+                Text(
+                    text = "Re-apply",
+                    color = Color(0xFF00E5FF),
+                    fontFamily = ManropeFamily,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }
@@ -1025,32 +1327,44 @@ fun isSamsungVideoLockAvailable(context: Context): Boolean {
     }
 }
 
+fun isAuroraWallpaperActive(context: Context): Boolean {
+    return try {
+        val wm = WallpaperManager.getInstance(context)
+        val info = wm.wallpaperInfo
+        info != null &&
+                info.packageName == context.packageName &&
+                info.serviceName == AuroraWallpaperService::class.java.name
+    } catch (_: Throwable) {
+        false
+    }
+}
+
 fun applyImageWallpaper(context: Context, imagePath: String, flags: Int, scalingMode: String = "fill"): Boolean {
     return try {
         val bitmap = BitmapFactory.decodeFile(imagePath) ?: return false
         val wm = WallpaperManager.getInstance(context)
-        if (scalingMode == "fit") {
-            val dm = context.resources.displayMetrics
-            val screenW = dm.widthPixels
-            val screenH = dm.heightPixels
-            val fitted = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(fitted)
-            canvas.drawColor(android.graphics.Color.BLACK)
-            val scale = minOf(screenW.toFloat() / bitmap.width, screenH.toFloat() / bitmap.height)
-            val dx = (screenW - bitmap.width * scale) / 2f
-            val dy = (screenH - bitmap.height * scale) / 2f
-            val matrix = android.graphics.Matrix().apply {
-                postScale(scale, scale)
-                postTranslate(dx, dy)
-            }
-            canvas.drawBitmap(bitmap, matrix, null)
-            wm.setBitmap(fitted, null, true, flags)
-            fitted.recycle()
-            bitmap.recycle()
+        val dm = context.resources.displayMetrics
+        val screenW = dm.widthPixels
+        val screenH = dm.heightPixels
+        val resultBitmap = Bitmap.createBitmap(screenW, screenH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(resultBitmap)
+        canvas.drawColor(android.graphics.Color.BLACK)
+
+        val scale = if (scalingMode == "fit") {
+            minOf(screenW.toFloat() / bitmap.width, screenH.toFloat() / bitmap.height)
         } else {
-            wm.setBitmap(bitmap, null, true, flags)
-            bitmap.recycle()
+            maxOf(screenW.toFloat() / bitmap.width, screenH.toFloat() / bitmap.height)
         }
+        val dx = (screenW - bitmap.width * scale) / 2f
+        val dy = (screenH - bitmap.height * scale) / 2f
+        val matrix = android.graphics.Matrix().apply {
+            postScale(scale, scale)
+            postTranslate(dx, dy)
+        }
+        canvas.drawBitmap(bitmap, matrix, null)
+        wm.setBitmap(resultBitmap, null, true, flags)
+        resultBitmap.recycle()
+        bitmap.recycle()
         true
     } catch (e: Exception) {
         Log.w("Aurora", "Failed to apply image wallpaper", e)
@@ -1152,13 +1466,11 @@ fun promoteStagingToActive(context: Context, stagingPath: String, type: String):
     val stagingFile = File(stagingPath)
     if (stagingFile.exists()) {
         stagingFile.copyTo(activeFile, overwrite = true)
-        stagingFile.delete()
+        if (stagingFile.name.startsWith("staging_") || stagingFile.name.startsWith("download_temp_") || stagingFile.name.endsWith(".tmp")) {
+            stagingFile.delete()
+        }
     }
     activeFile.setReadable(true, false)
-
-    if (type == "video") {
-        generatePosterFrame(context, activeFile.absolutePath)
-    }
 
     cleanupOldActiveWallpapers(context, activeFile.name)
 
@@ -1347,80 +1659,6 @@ fun cleanupOldActiveWallpapers(context: Context, currentFileName: String) {
         }
     } catch (e: Exception) {
         Log.w("Aurora", "Error cleaning old active wallpapers", e)
-    }
-}
-
-fun generatePosterFrame(context: Context, videoPath: String) {
-    try {
-        val posterFile = File(context.filesDir, "current_wallpaper_poster.jpg")
-        val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(videoPath)
-        val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-        val durationMs = durationStr?.toLongOrNull() ?: 1000L
-
-        val percentages = listOf(0.50f, 0.35f, 0.65f, 0.20f, 0.80f, 0.10f)
-        var bestFrame: Bitmap? = null
-        var maxLuma = -1f
-
-        for (pct in percentages) {
-            val targetMs = (durationMs * pct).toLong().coerceIn(10L, durationMs)
-            val micros = targetMs * 1000L
-            val frame = retriever.getFrameAtTime(micros, MediaMetadataRetriever.OPTION_CLOSEST)
-            if (frame != null) {
-                val scaled16 = Bitmap.createScaledBitmap(frame, 16, 16, true)
-                var totalLuma = 0f
-                for (x in 0 until 16) {
-                    for (y in 0 until 16) {
-                        val px = scaled16.getPixel(x, y)
-                        val r = (px shr 16) and 0xFF
-                        val g = (px shr 8) and 0xFF
-                        val b = px and 0xFF
-                        val luma = 0.299f * r + 0.587f * g + 0.114f * b
-                        totalLuma += luma
-                    }
-                }
-                scaled16.recycle()
-                val avgLuma = totalLuma / 256f
-                if (avgLuma > maxLuma) {
-                    maxLuma = avgLuma
-                    bestFrame = frame
-                }
-                if (avgLuma > 25f) break
-            }
-        }
-        retriever.release()
-
-        if (bestFrame != null) {
-            val softwareBitmap = if (bestFrame.config == Bitmap.Config.HARDWARE) {
-                bestFrame.copy(Bitmap.Config.ARGB_8888, false)
-            } else {
-                bestFrame
-            }
-            val metrics = context.resources.displayMetrics
-            val screenW = metrics.widthPixels
-            val screenH = metrics.heightPixels
-
-            val srcW = softwareBitmap.width
-            val srcH = softwareBitmap.height
-
-            val scale = maxOf(screenW.toFloat() / srcW, screenH.toFloat() / srcH)
-            val scaledW = (srcW * scale).toInt()
-            val scaledH = (srcH * scale).toInt()
-
-            val scaledBitmap = Bitmap.createScaledBitmap(softwareBitmap, scaledW, scaledH, true)
-            val cropX = ((scaledW - screenW) / 2).coerceAtLeast(0)
-            val cropY = ((scaledH - screenH) / 2).coerceAtLeast(0)
-
-            val finalCropped = Bitmap.createBitmap(scaledBitmap, cropX, cropY, screenW, screenH)
-
-            FileOutputStream(posterFile).use { out ->
-                finalCropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
-            }
-            posterFile.setReadable(true, false)
-            Log.d("AuroraPicker", "Poster frame saved to ${posterFile.absolutePath}")
-        }
-    } catch (e: Exception) {
-        Log.e("AuroraPicker", "generatePosterFrame failed", e)
     }
 }
 

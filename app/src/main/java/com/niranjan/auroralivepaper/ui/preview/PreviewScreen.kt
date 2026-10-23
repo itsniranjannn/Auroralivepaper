@@ -43,6 +43,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.niranjan.auroralivepaper.data.SettingsPrefs
+import com.niranjan.auroralivepaper.ui.picker.isAuroraWallpaperActive
 import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import java.io.File
 
@@ -325,7 +326,8 @@ fun PreviewScreen(
                             // 1. Home Screen Button
                             Button(
                                 onClick = {
-                                    if (mediaType == "video" || mediaType == "gif") {
+                                    val isActive = isAuroraWallpaperActive(context)
+                                    if (!isActive && (mediaType == "video" || mediaType == "gif")) {
                                         guidanceMessage = "Choose 'Home screen' on the next screen."
                                         pendingAction = onSetHome
                                         showGuidanceDialog = true
@@ -389,7 +391,8 @@ fun PreviewScreen(
                             // 3. Both Screens Button
                             Button(
                                 onClick = {
-                                    if (mediaType == "video" || mediaType == "gif") {
+                                    val isActive = isAuroraWallpaperActive(context)
+                                    if (!isActive && (mediaType == "video" || mediaType == "gif")) {
                                         guidanceMessage = "Choose 'Home screen and lock screen' on the next screen."
                                         pendingAction = onSetBoth
                                         showGuidanceDialog = true

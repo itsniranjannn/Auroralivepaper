@@ -1,6 +1,11 @@
 package com.niranjan.auroralivepaper.ui.components
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -10,10 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.niranjan.auroralivepaper.data.SettingsPrefs
@@ -21,102 +26,243 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 private val NearBlack = Color(0xFF07090F)
-private val DeepPurple = Color(0xFF2D1B4E)
-private val Violet = Color(0xFF4A2E7A)
-private val MidnightBlue = Color(0xFF1B2A4E)
-private val AuroraGreen = Color(0xFF2E7A5C)
-private val Cyan = Color(0xFF2C6E7A)
-private val SoftTeal = Color(0xFF1F4E4A)
-private val PinkEdge = Color(0xFF7A3E6E)
+private val BioluminescentCyan = Color(0xFF4DD0E1)
+private val DeepElectricViolet = Color(0xFF651FFF)
+private val EmeraldMint = Color(0xFF00BFA5)
+private val AuroraTeal = Color(0xFF00E5FF)
+
+private data class StarParticle(
+    val x: Float,
+    val y: Float,
+    val phase: Float,
+    val radius: Float
+)
+
+private data class BokehOrb(
+    val x: Float,
+    val initialY: Float,
+    val radius: Float,
+    val driftSpeed: Float,
+    val color: Color
+)
 
 @Composable
-fun AuroraAnimatedBackground(content: @Composable () -> Unit) {
+fun AuroraLivingBackground(
+    modifier: Modifier = Modifier,
+    transitionBoost: Float = 1.0f,
+    content: @Composable () -> Unit
+) {
     val context = LocalContext.current
     val richMotion = remember(context) { SettingsPrefs.richMotion(context) }
 
-    val infinite = rememberInfiniteTransition(label = "auroraRibbonMotion")
-
-    val animatedBlobDrift by infinite.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(22000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "blobDrift"
+    val infinite = rememberInfiniteTransition("livingAuroraMotion")
+    val basePhase by infinite.animateFloat(
+        initialValue = 0.0f,
+        targetValue = 6.2831855f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(18000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "auroraBasePhase"
+    )
+    val twinklePhase by infinite.animateFloat(
+        initialValue = 0.0f,
+        targetValue = 6.2831855f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "starTwinkle"
+    )
+    val orbDrift by infinite.animateFloat(
+        initialValue = 0.0f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(24000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "bokehDrift"
     )
 
-    val animatedTwinkle by infinite.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2500, easing = LinearEasing), RepeatMode.Reverse),
-        label = "twinkle"
-    )
+    val distantStars = remember {
+        val rand = Random(42)
+        List(26) {
+            StarParticle(
+                x = rand.nextFloat(),
+                y = rand.nextFloat() * 0.75f,
+                phase = rand.nextFloat() * 2.0f * 3.1415927f,
+                radius = (rand.nextFloat() * 0.9f) + 0.8f
+            )
+        }
+    }
 
-    val blobDrift = if (richMotion) animatedBlobDrift else 0f
-    val twinkle = if (richMotion) animatedTwinkle else 0f
-
-    val stars = remember {
-        val seed = Random(19)
-        List(12) {
-            Triple(
-                seed.nextFloat(),
-                seed.nextFloat() * 0.45f,
-                seed.nextFloat()
+    val bokehOrbs = remember {
+        val rand = Random(88)
+        List(7) { i ->
+            val color = when (i % 3) {
+                0 -> BioluminescentCyan
+                1 -> DeepElectricViolet
+                else -> EmeraldMint
+            }
+            BokehOrb(
+                x = (rand.nextFloat() * 0.84f) + 0.08f,
+                initialY = rand.nextFloat(),
+                radius = (rand.nextFloat() * 18.0f) + 14.0f,
+                driftSpeed = (rand.nextFloat() * 0.05f) + 0.04f,
+                color = color
             )
         }
     }
 
     val vignetteBrush = remember {
         Brush.radialGradient(
-            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f)),
-            radius = 1200f
+            colors = listOf(
+                Color.Transparent,
+                Color.Black.copy(alpha = 0.65f)
+            ),
+            radius = 1350.0f
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Canvas(modifier = Modifier.fillMaxSize().background(NearBlack)) {
-            fun drawRibbon(color: Color, cx: Float, cy: Float, radius: Float, stretchX: Float, rotationDeg: Float) {
-                rotate(degrees = rotationDeg, pivot = Offset(cx, cy)) {
-                    scale(scaleX = stretchX, scaleY = 1f, pivot = Offset(cx, cy)) {
-                        drawCircle(
-                            brush = Brush.radialGradient(colors = listOf(color, Color.Transparent)),
-                            radius = radius,
-                            center = Offset(cx, cy)
-                        )
-                    }
+    val dynamicPhase = if (richMotion) basePhase * transitionBoost else 0.0f
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(NearBlack)
+        ) {
+            val w = size.width
+            val h = size.height
+
+            val path1 = Path()
+            val path2 = Path()
+            val path3 = Path()
+
+            val p1 = dynamicPhase
+            path1.moveTo((-w) * 0.15f, (0.22f * h) + (sin(p1) * 35.0f))
+            path1.cubicTo(
+                w * 0.25f, (0.12f * h) + (sin(p1 + 1.2f) * 55.0f),
+                w * 0.65f, (0.38f * h) + (sin(2.5f + p1) * 65.0f),
+                w * 1.15f, (h * 0.25f) + (sin(p1 + 3.8f) * 45.0f)
+            )
+            path1.lineTo(w * 1.15f, (0.58f * h) + (sin(1.5f + p1) * 40.0f))
+            path1.cubicTo(
+                w * 0.7f, (0.68f * h) + (sin(3.2f + p1) * 50.0f),
+                0.3f * w, (0.44f * h) + (sin(0.8f + p1) * 45.0f),
+                (-w) * 0.15f, 0.48f * h
+            )
+            path1.close()
+            drawPath(
+                path = path1,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        BioluminescentCyan.copy(alpha = 0.4f),
+                        DeepElectricViolet.copy(alpha = 0.32f),
+                        AuroraTeal.copy(alpha = 0.2f)
+                    ),
+                    start = Offset((-w) * 0.1f, h * 0.15f),
+                    end = Offset(w * 1.1f, h * 0.6f)
+                ),
+                blendMode = BlendMode.Screen
+            )
+
+            val p2 = (0.85f * dynamicPhase) + 1.6f
+            path2.moveTo((-w) * 0.2f, (0.38f * h) + (sin(p2) * 40.0f))
+            path2.cubicTo(
+                w * 0.2f, (sin(1.5f + p2) * 60.0f) + (0.52f * h),
+                w * 0.75f, (0.28f * h) + (sin(2.8f + p2) * 70.0f),
+                w * 1.2f, (0.48f * h) + (sin(p2 + 4.2f) * 50.0f)
+            )
+            path2.lineTo(w * 1.2f, (h * 0.75f) + (sin(1.8f + p2) * 45.0f))
+            path2.cubicTo(
+                w * 0.65f, (h * 0.6f) + (sin(3.0f + p2) * 55.0f),
+                w * 0.25f, (0.78f * h) + (sin(0.9f + p2) * 45.0f),
+                (-w) * 0.2f, h * 0.65f
+            )
+            path2.close()
+            drawPath(
+                path = path2,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        DeepElectricViolet.copy(alpha = 0.38f),
+                        EmeraldMint.copy(alpha = 0.32f),
+                        BioluminescentCyan.copy(alpha = 0.25f)
+                    ),
+                    start = Offset((-w) * 0.1f, 0.35f * h),
+                    end = Offset(w * 1.1f, h * 0.75f)
+                ),
+                blendMode = BlendMode.Screen
+            )
+
+            val p3 = (dynamicPhase * 0.7f) + 3.1f
+            path3.moveTo((-w) * 0.1f, (h * 0.6f) + (sin(p3) * 35.0f))
+            path3.cubicTo(
+                w * 0.35f, (0.78f * h) + (sin(1.4f + p3) * 50.0f),
+                w * 0.68f, (0.55f * h) + (sin(2.6f + p3) * 60.0f),
+                w * 1.15f, (0.72f * h) + (sin(3.9f + p3) * 40.0f)
+            )
+            path3.lineTo(w * 1.15f, 0.92f * h)
+            path3.cubicTo(
+                w * 0.7f, (0.85f * h) + (sin(2.0f + p3) * 40.0f),
+                w * 0.3f, (0.94f * h) + (sin(p3 + 0.6f) * 45.0f),
+                (-w) * 0.1f, h * 0.82f
+            )
+            path3.close()
+            drawPath(
+                path = path3,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        EmeraldMint.copy(alpha = 0.32f),
+                        BioluminescentCyan.copy(alpha = 0.28f),
+                        DeepElectricViolet.copy(alpha = 0.18f)
+                    ),
+                    start = Offset((-w) * 0.1f, 0.55f * h),
+                    end = Offset(w * 1.1f, 0.95f * h)
+                ),
+                blendMode = BlendMode.Screen
+            )
+
+            for (star in distantStars) {
+                val twinkle = ((0.5f * sin(twinklePhase + star.phase).coerceIn(0.0f, 1.0f)) + 0.2f).coerceIn(0.15f, 0.75f)
+                drawCircle(
+                    color = Color.White.copy(alpha = twinkle),
+                    radius = star.radius.dp.toPx(),
+                    center = Offset(star.x * w, star.y * h)
+                )
+            }
+
+            if (richMotion) {
+                for (bokehOrb in bokehOrbs) {
+                    val initialY = (((bokehOrb.initialY - (((orbDrift * bokehOrb.driftSpeed) * 8.0f) * transitionBoost)) % 1.0f) + 1.0f) % 1.0f
+                    val rPx = bokehOrb.radius.dp.toPx()
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                bokehOrb.color.copy(alpha = 0.16f),
+                                bokehOrb.color.copy(alpha = 0.05f),
+                                Color.Transparent
+                            ),
+                            radius = rPx
+                        ),
+                        radius = rPx,
+                        center = Offset(bokehOrb.x * w, h * initialY)
+                    )
                 }
-            }
-
-            // Authentic aurora ribbons
-            drawRibbon(AuroraGreen.copy(alpha = 0.30f), size.width * (0.2f + blobDrift * 0.15f), size.height * 0.18f, size.minDimension * 0.55f, 2.6f, -18f)
-            drawRibbon(DeepPurple.copy(alpha = 0.28f), size.width * (0.1f + blobDrift * 0.12f), size.height * 0.32f, size.minDimension * 0.5f, 2.3f, -22f)
-            drawRibbon(Violet.copy(alpha = 0.24f), size.width * (0.42f + blobDrift * 0.1f), size.height * 0.42f, size.minDimension * 0.45f, 2.5f, 15f)
-            drawRibbon(MidnightBlue.copy(alpha = 0.26f), size.width * (0.6f - blobDrift * 0.12f), size.height * 0.55f, size.minDimension * 0.45f, 2.3f, -10f)
-            drawRibbon(Cyan.copy(alpha = 0.24f), size.width * (0.75f - blobDrift * 0.1f), size.height * 0.68f, size.minDimension * 0.4f, 2.4f, 20f)
-            drawRibbon(AuroraGreen.copy(alpha = 0.22f), size.width * (0.55f - blobDrift * 0.08f), size.height * 0.8f, size.minDimension * 0.5f, 2.6f, 8f)
-            drawRibbon(SoftTeal.copy(alpha = 0.26f), size.width * (0.85f - blobDrift * 0.15f), size.height * 0.88f, size.minDimension * 0.45f, 2.2f, -15f)
-            drawRibbon(PinkEdge.copy(alpha = 0.12f), size.width * (0.3f + blobDrift * 0.1f), size.height * 0.25f, size.minDimension * 0.4f, 2.8f, -25f)
-
-            // Subtle grain
-            val grainSeed = Random(101)
-            repeat(100) {
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.018f),
-                    radius = 0.8.dp.toPx(),
-                    center = Offset(grainSeed.nextFloat() * size.width, grainSeed.nextFloat() * size.height)
-                )
-            }
-
-            // Twinkling stars
-            stars.forEach { (sx, sy, phase) ->
-                val localTwinkle = (twinkle + phase) % 1f
-                val starAlpha = (sin(localTwinkle * Math.PI).toFloat()).coerceIn(0.1f, 1f) * 0.6f
-                val starSize = 1.2f + 1.2f * starAlpha
-                drawCircle(
-                    color = Color.White.copy(alpha = starAlpha),
-                    radius = starSize.dp.toPx(),
-                    center = Offset(size.width * sx, size.height * sy)
-                )
             }
 
             drawRect(brush = vignetteBrush)
         }
         content()
     }
+}
+
+@Composable
+fun AuroraAnimatedBackground(
+    content: @Composable () -> Unit
+) {
+    AuroraLivingBackground(
+        transitionBoost = 1.0f,
+        content = content
+    )
 }

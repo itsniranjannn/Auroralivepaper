@@ -17,15 +17,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
@@ -35,6 +40,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.niranjan.auroralivepaper.data.SettingsPrefs
+import com.niranjan.auroralivepaper.ui.components.AuroraLivingBackground
 import com.niranjan.auroralivepaper.ui.picker.WallpaperPickerScreen
 import com.niranjan.auroralivepaper.ui.picker.applyImageWallpaper
 import com.niranjan.auroralivepaper.ui.picker.applyLockScreenFromGif
@@ -46,6 +53,7 @@ import com.niranjan.auroralivepaper.ui.picker.launchLiveWallpaperPicker
 import com.niranjan.auroralivepaper.ui.picker.launchSamsungVideoLockEditor
 import com.niranjan.auroralivepaper.ui.picker.promoteStagingToActive
 import com.niranjan.auroralivepaper.ui.picker.saveWallpaperMediaPath
+import com.niranjan.auroralivepaper.ui.picker.isAuroraWallpaperActive
 import com.niranjan.auroralivepaper.ui.picker.trimVideoTo15s
 import com.niranjan.auroralivepaper.ui.preview.PreviewScreen
 import com.niranjan.auroralivepaper.ui.splash.AuroraIntroScreen
@@ -56,6 +64,7 @@ import com.niranjan.auroralivepaper.ui.settings.BatterySettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.StorageSettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.ExperienceSettingsScreen
 import com.niranjan.auroralivepaper.ui.settings.AboutScreen
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -63,8 +72,6 @@ import java.io.File
 class MainActivity : ComponentActivity() {
 
     private var checkedPickerReturn = false
-    private var pendingLockStillFallback = false
-    private var pendingLockPath: String? = null
     private var pendingLockExportAction: (() -> Unit)? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -87,53 +94,71 @@ class MainActivity : ComponentActivity() {
         setContent {
             AuroraLivePaperTheme {
                 val navController = rememberNavController()
-                NavHost(navController = navController, startDestination = "intro") {
+                val transitionBoost = remember { Animatable(1.0f) }
+                val scope = rememberCoroutineScope()
 
-                    composable("intro") {
-                        AuroraIntroScreen(onFinished = {
-                            navController.navigate("home") {
-                                popUpTo("intro") { inclusive = true }
-                            }
-                        })
-                    }
-
-                    composable(
-                        "home",
-                        enterTransition = {
-                            fadeIn(animationSpec = tween(400)) + slideIntoContainer(
-                                towards = AnimatedContentTransitionScope.SlideDirection.End,
-                                animationSpec = tween(400)
-                            )
-                        },
-                        exitTransition = {
-                            fadeOut(animationSpec = tween(300)) + slideOutOfContainer(
-                                towards = AnimatedContentTransitionScope.SlideDirection.Start,
-                                animationSpec = tween(300)
-                            )
-                        }
+                AuroraLivingBackground(transitionBoost = transitionBoost.value) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = "intro",
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        val haptic = LocalHapticFeedback.current
-                        LaunchedEffect(Unit) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        composable("intro") {
+                            AuroraIntroScreen(
+                                onTransitionStart = {
+                                    scope.launch {
+                                        transitionBoost.animateTo(2.5f, tween(150, easing = FastOutSlowInEasing))
+                                        transitionBoost.animateTo(1.0f, tween(500, easing = FastOutSlowInEasing))
+                                    }
+                                },
+                                onFinished = {
+                                    navController.navigate("home") {
+                                        popUpTo("intro") { inclusive = true }
+                                    }
+                                }
+                            )
                         }
 
-                        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(innerPadding)
-                            ) {
-                                WallpaperPickerScreen(
-                                    onPreview = { path, type ->
-                                        navController.navigate("preview/${type}?path=${Uri.encode(path)}")
-                                    },
-                                    onOpenSettings = {
-                                        navController.navigate("settings")
-                                    }
+                        composable(
+                            "home",
+                            enterTransition = {
+                                fadeIn(animationSpec = tween(400)) + slideIntoContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(400)
+                                )
+                            },
+                            exitTransition = {
+                                fadeOut(animationSpec = tween(300)) + slideOutOfContainer(
+                                    AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(300)
                                 )
                             }
+                        ) {
+                            val haptic = LocalHapticFeedback.current
+                            LaunchedEffect(Unit) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+
+                            Scaffold(
+                                modifier = Modifier.fillMaxSize(),
+                                containerColor = Color.Transparent
+                            ) { innerPadding ->
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(innerPadding)
+                                ) {
+                                    WallpaperPickerScreen(
+                                        onPreview = { path, type ->
+                                            navController.navigate("preview/${type}?path=${Uri.encode(path)}")
+                                        },
+                                        onOpenSettings = {
+                                            navController.navigate("settings")
+                                        }
+                                    )
+                                }
+                            }
                         }
-                    }
 
                     composable("settings") {
                         SettingsScreen(
@@ -196,14 +221,10 @@ class MainActivity : ComponentActivity() {
                                         Toast.makeText(this@MainActivity, if (ok) "Home wallpaper set!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
                                     } else {
                                         saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
-                                        val wm = WallpaperManager.getInstance(this@MainActivity)
-                                        val info = wm.wallpaperInfo
-                                        val isOurServiceActive = info != null &&
-                                                info.packageName == packageName &&
-                                                info.serviceName == AuroraWallpaperService::class.java.name
+                                        val isOurServiceActive = isAuroraWallpaperActive(this@MainActivity)
 
                                         if (isOurServiceActive) {
-                                            Toast.makeText(this@MainActivity, "Video changed", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(this@MainActivity, "Wallpaper updated!", Toast.LENGTH_SHORT).show()
                                         } else {
                                             checkedPickerReturn = true
                                             launchLiveWallpaperPicker(this@MainActivity)
@@ -266,12 +287,10 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             AlertDialog.Builder(this@MainActivity)
                                                 .setTitle("Lock Screen Setup")
-                                                .setMessage("Your phone may offer a lock screen option on the next screen. If it doesn't, the lock screen will get a still image.")
+                                                .setMessage("To set this video on your lock screen, choose 'Home screen and lock screen' in the live wallpaper picker.")
                                                 .setPositiveButton("Continue") { _, _ ->
                                                     saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
                                                     checkedPickerReturn = true
-                                                    pendingLockStillFallback = true
-                                                    pendingLockPath = activePath
                                                     launchLiveWallpaperPicker(this@MainActivity)
                                                 }
                                                 .setNegativeButton("Cancel", null)
@@ -294,8 +313,13 @@ class MainActivity : ComponentActivity() {
                                         Toast.makeText(this@MainActivity, if (ok) "Wallpaper applied to Both!" else "Failed to set wallpaper", Toast.LENGTH_SHORT).show()
                                     } else {
                                         saveWallpaperMediaPath(this@MainActivity, activePath, type, scalingMode)
-                                        checkedPickerReturn = true
-                                        launchLiveWallpaperPicker(this@MainActivity)
+                                        val isOurServiceActive = isAuroraWallpaperActive(this@MainActivity)
+                                        if (isOurServiceActive) {
+                                            Toast.makeText(this@MainActivity, "Wallpaper updated for Both!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            checkedPickerReturn = true
+                                            launchLiveWallpaperPicker(this@MainActivity)
+                                        }
                                     }
                                 }
                                 navController.popBackStack("home", false)
@@ -310,75 +334,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
 
     override fun onResume() {
         super.onResume()
-        if (checkedPickerReturn) {
-            checkedPickerReturn = false
-
-            // Check 1: at 1500 ms
-            mainHandler.postDelayed({
-                try {
-                    val wm = WallpaperManager.getInstance(this)
-                    val info = wm.wallpaperInfo
-                    val isOurServiceActive1 = info != null &&
-                            info.packageName == packageName &&
-                            info.serviceName == AuroraWallpaperService::class.java.name
-
-                    Log.d("MainActivity", "Check 1 (1500ms): isOurServiceActive=$isOurServiceActive1, activeComponent=${info?.component}")
-
-                    if (pendingLockStillFallback) {
-                        pendingLockStillFallback = false
-                        val fallbackPath = pendingLockPath
-                        pendingLockPath = null
-
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            val lockInfo = try {
-                                val method = WallpaperManager::class.java.getMethod("getWallpaperInfo", Int::class.javaPrimitiveType)
-                                method.invoke(wm, WallpaperManager.FLAG_LOCK) as? WallpaperInfo
-                            } catch (e: Throwable) {
-                                null
-                            }
-                            val isOurLockActive = lockInfo != null &&
-                                    lockInfo.packageName == packageName &&
-                                    lockInfo.serviceName == AuroraWallpaperService::class.java.name
-
-                            if (!isOurLockActive && fallbackPath != null) {
-                                val ok = applyLockScreenFromVideo(this, fallbackPath, 1f)
-                                Toast.makeText(this, if (ok) "Lock screen set to a still image." else "Failed to set lock screen", Toast.LENGTH_SHORT).show()
-                            }
-                        } else {
-                            if (!isOurServiceActive1 && fallbackPath != null) {
-                                AlertDialog.Builder(this)
-                                    .setTitle("Lock Screen Wallpaper")
-                                    .setMessage("Apply a still image to the lock screen instead?")
-                                    .setPositiveButton("Yes") { _, _ ->
-                                        val ok = applyLockScreenFromVideo(this, fallbackPath, 1f)
-                                        Toast.makeText(this, if (ok) "Lock screen set to a still image." else "Failed to set lock screen", Toast.LENGTH_SHORT).show()
-                                    }
-                                    .setNegativeButton("No", null)
-                                    .show()
-                            }
-                        }
-                    } else if (!isOurServiceActive1) {
-                        // Check 2: re-check at 3000 ms
-                        mainHandler.postDelayed({
-                            try {
-                                val info2 = wm.wallpaperInfo
-                                val isOurServiceActive2 = info2 != null &&
-                                        info2.packageName == packageName &&
-                                        info2.serviceName == AuroraWallpaperService::class.java.name
-
-                                Log.d("MainActivity", "Check 2 (3000ms): isOurServiceActive=$isOurServiceActive2, activeComponent=${info2?.component}")
-                            } catch (e2: Exception) {
-                                Log.e("MainActivity", "Error in Check 2", e2)
-                            }
-                        }, 1500)
-                    }
-                } catch (e: Exception) {
-                    Log.e("MainActivity", "Error in Check 1", e)
-                }
-            }, 1500)
-        }
+        checkedPickerReturn = false
     }
 }

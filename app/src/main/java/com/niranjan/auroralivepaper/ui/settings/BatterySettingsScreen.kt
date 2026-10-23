@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import com.niranjan.auroralivepaper.data.SettingsPrefs
+import com.niranjan.auroralivepaper.ui.theme.ManropeFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,14 @@ fun BatterySettingsScreen(onBack: () -> Unit) {
             SettingsHeader(Icons.Filled.BatteryChargingFull, "Battery & Performance", "Manage power usage.", onBack)
 
             SettingsSection("Battery") {
+                Text(
+                    text = "When paused, the wallpaper freezes on the current frame until the condition ends.",
+                    color = Color.White.copy(alpha = 0.70f),
+                    fontFamily = ManropeFamily,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
                 CheckRow("Pause wallpaper when Battery Saver is on", pauseOnSaver) {
                     pauseOnSaver = it; SettingsPrefs.setPauseOnBatterySaver(context, it)
                 }
@@ -40,6 +49,7 @@ fun BatterySettingsScreen(onBack: () -> Unit) {
                     pauseThreshold = it; SettingsPrefs.setPauseBelowThreshold(context, it)
                 }
                 if (pauseThreshold) {
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text("${threshold.toInt()}%", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
                     Slider(
                         value = threshold,
@@ -48,9 +58,6 @@ fun BatterySettingsScreen(onBack: () -> Unit) {
                     )
                 }
             }
-
-            // Performance Mode removed — was not wired to any real behavior yet.
-            // Re-add once actual quality/battery tiers are implemented in the wallpaper engine.
 
             Spacer(modifier = Modifier.height(40.dp))
         }

@@ -97,6 +97,20 @@ object SettingsPrefs {
 
     fun setScalingMode(context: Context, value: String) {
         prefs(context).edit().putString(KEY_SCALING_MODE, value).apply()
+        try {
+            context.getSharedPreferences("aurora_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_SCALING_MODE, value)
+                .apply()
+        } catch (_: Exception) {}
+
+        try {
+            val reloadIntent = android.content.Intent("com.niranjan.auroralivepaper.RELOAD_WALLPAPER").apply {
+                setPackage(context.packageName)
+                putExtra("scaling_mode", value)
+            }
+            context.sendBroadcast(reloadIntent)
+        } catch (_: Exception) {}
     }
 
     fun loopAutomatically(context: Context): Boolean =

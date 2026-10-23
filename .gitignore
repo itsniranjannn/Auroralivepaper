@@ -14,3 +14,7 @@
 .cxx
 local.properties
 .kotlin
+keystore.properties
+*.jks
+
+*.md
