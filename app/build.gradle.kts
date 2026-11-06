@@ -47,7 +47,8 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            signingConfig = signingConfigs.getByName("release")
+            // Sign only when a keystore is configured, so other machines / CI can still build.
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -74,12 +75,12 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("androidx.compose.animation:animation:1.7.5")
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
-    implementation("androidx.core:core-splashscreen:1.0.1")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
-    implementation("androidx.compose.material:material-icons-extended:1.7.5")
+    implementation(libs.androidx.compose.animation)
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.compose.material.icons.extended)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

@@ -29,7 +29,6 @@ object SettingsPrefs {
 
     private const val KEY_PLAY_WALLPAPER_SOUND = "play_wallpaper_sound"
     private const val KEY_WALLPAPER_VOLUME = "wallpaper_volume"
-    private const val KEY_RESOLUTION_MODE = "resolution_mode"
     private const val KEY_SCALING_MODE = "scaling_mode"
     private const val KEY_LOOP_AUTOMATICALLY = "loop_automatically"
 
@@ -89,16 +88,6 @@ object SettingsPrefs {
 
     fun setWallpaperVolume(context: Context, value: Float) {
         prefs(context).edit().putFloat(KEY_WALLPAPER_VOLUME, value.coerceIn(0f, 1f)).apply()
-    }
-
-    /** One of: "auto", "1080p", "1440p", "original" */
-    @Deprecated("Unused: no effect on playback")
-    fun resolutionMode(context: Context): String =
-        prefs(context).getString(KEY_RESOLUTION_MODE, "auto") ?: "auto"
-
-    @Deprecated("Unused: no effect on playback")
-    fun setResolutionMode(context: Context, value: String) {
-        prefs(context).edit().putString(KEY_RESOLUTION_MODE, value).apply()
     }
 
     /** One of: "fill" (zooms to fill screen), "fit" (preserves entire video with letterboxing) */

@@ -59,7 +59,7 @@
     <td width="50%">
       <h3 align="center">🎬 Universal Media Engine</h3>
       <ul>
-        <li><b>Video Playback:</b> Video wallpaper playback using Android media playback components and Media3 ExoPlayer.</li>
+        <li><b>Video Playback:</b> Video wallpaper playback runs on Android's hardware-accelerated <code>MediaPlayer</code> inside the wallpaper engine. Media3 ExoPlayer powers the in-app preview.</li>
         <li><b>GIF Support:</b> Animated GIF handling using native decoding capabilities.</li>
         <li><b>Dynamic Scaling:</b> Fit and Fill options for adjusting wallpaper presentation while maintaining the playback configuration.</li>
         <li><b>Media Selection:</b> Import and manage supported image, GIF, and video wallpaper assets.</li>
