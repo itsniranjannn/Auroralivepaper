@@ -13,6 +13,7 @@ import android.graphics.Movie
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -290,7 +291,11 @@ class AuroraWallpaperService : WallpaperService() {
                             if (mediaPlayer != null && isPrepared) {
                                 mediaPlayer?.let { applyVideoScalingMode(it) }
                             }
-                            if (gifMovie == null && mediaPlayer == null) {
+                            if (gifDrawable != null) {
+                                // Redraw the current GIF frame with the new scaling mode.
+                                drawGifDrawableFrame()
+                            }
+                            if (!hasGif() && mediaPlayer == null) {
                                 currentHolder?.let { holder ->
                                     if (holder.surface.isValid) {
                                         val savedPath = mediaPrefs.getString("media_path", null)
@@ -381,7 +386,7 @@ class AuroraWallpaperService : WallpaperService() {
                 val savedScaling = getScalingMode()
                 val needsReload = (savedPath != currentLoadedPath) ||
                         (savedVersion != currentLoadedVersion) ||
-                        (mediaPlayer == null && gifMovie == null)
+                        (mediaPlayer == null && !hasGif())
 
                 if (needsReload) {
                     loadWallpaper(holder)
@@ -406,7 +411,7 @@ class AuroraWallpaperService : WallpaperService() {
                         } catch (e: Throwable) {
                             recoverPlayer("onSurfaceChanged setSurface: ${e.message}")
                         }
-                    } else if (gifMovie == null) {
+                    } else if (!hasGif()) {
                         loadWallpaper(holder)
                     }
                 }
@@ -463,7 +468,7 @@ class AuroraWallpaperService : WallpaperService() {
                         val savedScaling = getScalingMode()
                         val needsReload = (savedPath != currentLoadedPath) ||
                                 (savedVersion != currentLoadedVersion) ||
-                                (mediaPlayer == null && gifMovie == null)
+                                (mediaPlayer == null && !hasGif())
 
                         if (needsReload) {
                             currentHolder?.let { holder ->
@@ -663,6 +668,7 @@ class AuroraWallpaperService : WallpaperService() {
                     }
                     gifRunning = false
                     gifHandler.removeCallbacks(gifDrawRunnable)
+                    try { gifDrawable?.stop() } catch (_: Throwable) {}
                     // Note: MediaPlayer keeps the last rendered frame on the surface naturally.
                 } else {
                     if (lastPauseReason != null) {
@@ -675,7 +681,7 @@ class AuroraWallpaperService : WallpaperService() {
                     val savedScaling = getScalingMode()
                     val needsReload = (savedPath != currentLoadedPath) ||
                             (savedVersion != currentLoadedVersion) ||
-                            (mediaPlayer == null && gifMovie == null)
+                            (mediaPlayer == null && !hasGif())
 
                     if (needsReload && currentHolder?.surface?.isValid == true && !gifRunning) {
                         currentHolder?.let { loadWallpaper(it) }
@@ -690,9 +696,14 @@ class AuroraWallpaperService : WallpaperService() {
                             recoverPlayer("updatePlaybackState start failed: ${e.message}")
                         }
                     }
-                    if (gifMovie != null && !gifRunning) {
+                    if (hasGif() && !gifRunning) {
                         gifRunning = true
-                        gifHandler.post(gifDrawRunnable)
+                        val d = gifDrawable
+                        if (d != null) {
+                            try { d.start() } catch (e: Throwable) { Log.w("AuroraEngine", "GIF start failed", e) }
+                        } else {
+                            gifHandler.post(gifDrawRunnable)
+                        }
                     }
                 }
             } catch (e: Throwable) {
@@ -883,7 +894,88 @@ class AuroraWallpaperService : WallpaperService() {
             }
         }
 
+        // ---- GIF via AnimatedImageDrawable (API 28+) -------------------------------------------
+        // Frames advance at the GIF's own per-frame timing and we only redraw when a frame
+        // actually changes, instead of redrawing a software canvas every 33 ms regardless.
+        private var gifDrawable: android.graphics.drawable.AnimatedImageDrawable? = null
+
+        private fun hasGif(): Boolean = gifMovie != null || gifDrawable != null
+
+        private val gifDrawableCallback = object : android.graphics.drawable.Drawable.Callback {
+            override fun invalidateDrawable(who: android.graphics.drawable.Drawable) {
+                if (gifRunning) drawGifDrawableFrame()
+            }
+            override fun scheduleDrawable(who: android.graphics.drawable.Drawable, what: Runnable, `when`: Long) {
+                gifHandler.postAtTime(what, who, `when`)
+            }
+            override fun unscheduleDrawable(who: android.graphics.drawable.Drawable, what: Runnable) {
+                gifHandler.removeCallbacks(what, who)
+            }
+        }
+
+        private fun drawGifDrawableFrame() {
+            val d = gifDrawable ?: return
+            val holder = currentHolder ?: return
+            if (!holder.surface.isValid) return
+            var canvas: Canvas? = null
+            try {
+                val c = holder.lockCanvas()
+                if (c == null) return
+                canvas = c
+                val iw = d.intrinsicWidth
+                val ih = d.intrinsicHeight
+                if (iw <= 0 || ih <= 0) return
+                val scale = if (getScalingMode() == "fit") {
+                    minOf(c.width.toFloat() / iw, c.height.toFloat() / ih)
+                } else {
+                    maxOf(c.width.toFloat() / iw, c.height.toFloat() / ih)
+                }
+                c.drawColor(Color.BLACK)
+                c.save()
+                c.translate((c.width - iw * scale) / 2f, (c.height - ih * scale) / 2f)
+                c.scale(scale, scale)
+                d.setBounds(0, 0, iw, ih)
+                d.draw(c)
+                c.restore()
+            } catch (e: Throwable) {
+                Log.e("AuroraEngine", "Failed to draw GIF drawable frame", e)
+            } finally {
+                if (canvas != null) {
+                    try { holder.unlockCanvasAndPost(canvas) } catch (e: Throwable) {
+                        Log.e("AuroraEngine", "Error unlocking canvas for GIF drawable", e)
+                    }
+                }
+            }
+        }
+
+        private fun tryStartGifDrawable(path: String): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+            return try {
+                val source = android.graphics.ImageDecoder.createSource(File(path))
+                val drawable = android.graphics.ImageDecoder.decodeDrawable(source)
+                if (drawable !is android.graphics.drawable.AnimatedImageDrawable) return false
+                drawable.repeatCount = if (SettingsPrefs.loopAutomatically(applicationContext))
+                    android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE else 0
+                drawable.callback = gifDrawableCallback
+                gifDrawable = drawable
+                AuroraDebugLogger.log(applicationContext, "GIF: using AnimatedImageDrawable (${drawable.intrinsicWidth}x${drawable.intrinsicHeight})")
+                refreshPowerState()
+                if (!shouldPause()) {
+                    gifRunning = true
+                    drawable.start()
+                } else {
+                    drawGifDrawableFrame() // show the first frame while paused
+                }
+                true
+            } catch (e: Throwable) {
+                AuroraDebugLogger.log(applicationContext, "GIF: AnimatedImageDrawable failed, falling back to Movie: ${e.message}")
+                gifDrawable = null
+                false
+            }
+        }
+
         private fun startGif(path: String) {
+            if (tryStartGifDrawable(path)) return
             try {
                 gifMovie = FileInputStream(path).use { Movie.decodeStream(it) }
                 gifStartTime = 0
@@ -965,6 +1057,11 @@ class AuroraWallpaperService : WallpaperService() {
             mediaPlayer = null
             gifRunning = false
             gifHandler.removeCallbacks(gifDrawRunnable)
+            gifDrawable?.let { d ->
+                try { d.stop() } catch (_: Throwable) {}
+                d.callback = null
+            }
+            gifDrawable = null
             gifMovie = null
         }
     }
