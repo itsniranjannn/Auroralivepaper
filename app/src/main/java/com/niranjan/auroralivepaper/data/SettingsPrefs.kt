@@ -11,6 +11,14 @@ object SettingsPrefs {
 
     private const val PREFS_NAME = "aurora_settings_prefs"
 
+    // Defaults are public constants so unit tests can lock them in. NEVER default the pause rules to
+    // true: a phone already in Battery Saver would freeze the wallpaper on its first frame.
+    const val DEFAULT_PAUSE_ON_BATTERY_SAVER = false
+    const val DEFAULT_PAUSE_BELOW_THRESHOLD = false
+    const val DEFAULT_BATTERY_THRESHOLD = 20
+    const val DEFAULT_PLAY_SOUND = false
+    const val DEFAULT_LOOP = true
+
     // Keys
     private const val KEY_PAUSE_ON_BATTERY_SAVER = "pause_on_battery_saver"
     private const val KEY_PAUSE_BELOW_THRESHOLD = "pause_below_threshold"
@@ -31,21 +39,21 @@ object SettingsPrefs {
     // ---------- Battery & Performance ----------
 
     fun pauseOnBatterySaver(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_PAUSE_ON_BATTERY_SAVER, false)
+        prefs(context).getBoolean(KEY_PAUSE_ON_BATTERY_SAVER, DEFAULT_PAUSE_ON_BATTERY_SAVER)
 
     fun setPauseOnBatterySaver(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_PAUSE_ON_BATTERY_SAVER, value).apply()
     }
 
     fun pauseBelowThreshold(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_PAUSE_BELOW_THRESHOLD, false)
+        prefs(context).getBoolean(KEY_PAUSE_BELOW_THRESHOLD, DEFAULT_PAUSE_BELOW_THRESHOLD)
 
     fun setPauseBelowThreshold(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_PAUSE_BELOW_THRESHOLD, value).apply()
     }
 
     fun batteryThreshold(context: Context): Int =
-        prefs(context).getInt(KEY_BATTERY_THRESHOLD, 20)
+        prefs(context).getInt(KEY_BATTERY_THRESHOLD, DEFAULT_BATTERY_THRESHOLD)
 
     fun setBatteryThreshold(context: Context, value: Int) {
         prefs(context).edit().putInt(KEY_BATTERY_THRESHOLD, value).apply()
@@ -70,7 +78,7 @@ object SettingsPrefs {
     // ---------- Wallpaper Playback ----------
 
     fun playWallpaperSound(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_PLAY_WALLPAPER_SOUND, false)
+        prefs(context).getBoolean(KEY_PLAY_WALLPAPER_SOUND, DEFAULT_PLAY_SOUND)
 
     fun setPlayWallpaperSound(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_PLAY_WALLPAPER_SOUND, value).apply()
@@ -116,7 +124,7 @@ object SettingsPrefs {
     }
 
     fun loopAutomatically(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_LOOP_AUTOMATICALLY, true)
+        prefs(context).getBoolean(KEY_LOOP_AUTOMATICALLY, DEFAULT_LOOP)
 
     fun setLoopAutomatically(context: Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_LOOP_AUTOMATICALLY, value).apply()

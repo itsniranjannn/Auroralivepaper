@@ -32,6 +32,13 @@ class AuroraWallpaperService : WallpaperService() {
 
     companion object {
         const val ACTION_RELOAD_WALLPAPER = "com.niranjan.auroralivepaper.RELOAD_WALLPAPER"
+
+        /**
+         * Number of live (non-preview) engines. WallpaperManager.getWallpaperInfo() returns null on some
+         * OEM builds (seen on Samsung One UI) even while our wallpaper is running, so the app UI uses this
+         * as an additional, reliable "is Aurora active" signal. Service and UI share one process.
+         */
+        val activeEngineCount = kotlinx.coroutines.flow.MutableStateFlow(0)
     }
 
     override fun onCreateEngine(): Engine {
@@ -45,6 +52,7 @@ class AuroraWallpaperService : WallpaperService() {
     }
 
     inner class AuroraEngine : Engine() {
+        private var countedAsActive = false
 
         private var mediaPlayer: MediaPlayer? = null
         private var isPrepared = false
@@ -330,6 +338,10 @@ class AuroraWallpaperService : WallpaperService() {
                 val isScreenInteractive = pm?.isInteractive == true
                 isUserUnlockedToHome = !isLocked && isScreenInteractive
 
+                if (!isPreview && !countedAsActive) {
+                    countedAsActive = true
+                    activeEngineCount.value = activeEngineCount.value + 1
+                }
                 registerReceivers()
                 settingsPrefs.registerOnSharedPreferenceChangeListener(settingsListener)
                 mediaPrefs.registerOnSharedPreferenceChangeListener(mediaListener)
@@ -342,6 +354,10 @@ class AuroraWallpaperService : WallpaperService() {
             try {
                 super.onDestroy()
                 Log.d("AuroraEngine", "Engine.onDestroy: isPreview=$isPreview")
+                if (countedAsActive) {
+                    countedAsActive = false
+                    activeEngineCount.value = (activeEngineCount.value - 1).coerceAtLeast(0)
+                }
                 gifHandler.removeCallbacksAndMessages(null)
                 recoveryLimiter.reset()
                 unregisterReceivers()
@@ -610,11 +626,13 @@ class AuroraWallpaperService : WallpaperService() {
         }
 
         private fun shouldPause(): Boolean {
-            if (isPreview) return false
-            if (!isVisibleState) return true
-            if (SettingsPrefs.pauseOnBatterySaver(applicationContext) && isPowerSave) return true
-            if (isBatteryLow) return true
-            return false
+            return com.niranjan.auroralivepaper.util.PausePolicy.evaluate(
+                isPreview = isPreview,
+                isVisible = isVisibleState,
+                pauseOnBatterySaver = SettingsPrefs.pauseOnBatterySaver(applicationContext),
+                isPowerSave = isPowerSave,
+                isBatteryLow = isBatteryLow
+            ) != null
         }
 
         private fun updatePlaybackState() {

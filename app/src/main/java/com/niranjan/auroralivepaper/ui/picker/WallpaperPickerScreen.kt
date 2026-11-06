@@ -168,7 +168,8 @@ fun WallpaperPickerScreen(
         }
     }
 
-    val isOurWallpaperActive = isAuroraWallpaperActive(context)
+    val liveEngines by AuroraWallpaperService.activeEngineCount.collectAsState()
+    val isOurWallpaperActive = remember(liveEngines) { liveEngines > 0 || isAuroraWallpaperActive(context) }
 
     LaunchedEffect(Unit) {
         val richMotion = SettingsPrefs.richMotion(context)
@@ -1145,7 +1146,24 @@ private fun HeroNowPlayingCard(
                             fontSize = 15.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("Tap to preview & manage", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily, fontSize = 11.sp)
+                        var pauseReason by remember { mutableStateOf<com.niranjan.auroralivepaper.util.PausePolicy.Reason?>(null) }
+                        LaunchedEffect(activePath) {
+                            while (true) {
+                                pauseReason = com.niranjan.auroralivepaper.util.PauseStatus.current(context)
+                                kotlinx.coroutines.delay(5000)
+                            }
+                        }
+                        if (pauseReason != null) {
+                            Text(
+                                "Paused: ${pauseReason!!.label}",
+                                color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Warning,
+                                fontFamily = ManropeFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp
+                            )
+                        } else {
+                            Text("Tap to preview & manage", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily, fontSize = 11.sp)
+                        }
                     }
 
                     Box(
@@ -1477,6 +1495,8 @@ fun isSamsungVideoLockAvailable(context: Context): Boolean {
 }
 
 fun isAuroraWallpaperActive(context: Context): Boolean {
+    // Reliable on every OEM: our own engine is alive (see AuroraWallpaperService.activeEngineCount).
+    if (AuroraWallpaperService.activeEngineCount.value > 0) return true
     return try {
         val wm = WallpaperManager.getInstance(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
