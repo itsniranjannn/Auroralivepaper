@@ -92,6 +92,7 @@ import com.niranjan.auroralivepaper.util.WebVideoExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -145,6 +146,8 @@ fun WallpaperPickerScreen(
     val card3Alpha = remember { Animatable(0f) }
 
     var showUrlDialog by remember { mutableStateOf(false) }
+    // Running URL import, so the dialog's Cancel button can really stop the download.
+    var importJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     var isDragHovered by remember { mutableStateOf(false) }
     var recentsList by remember { mutableStateOf(getRecentWallpapers(context)) }
@@ -607,14 +610,25 @@ fun WallpaperPickerScreen(
 
             if (showUrlDialog) {
                 UrlUploadDialog(
-                    onDismiss = { showUrlDialog = false },
-                    onImport = { urlInput, onError, onProgress ->
-                        scope.launch(Dispatchers.IO) {
+                    onDismiss = {
+                        importJob?.cancel()
+                        importJob = null
+                        showUrlDialog = false
+                    },
+                    onCancelImport = {
+                        importJob?.cancel()
+                        importJob = null
+                    },
+                    onImport = { urlInput, onError, onProgress, onFraction ->
+                        importJob = scope.launch(Dispatchers.IO) {
                             var tempFile: File? = null
                             try {
                                 val rawInput = urlInput.trim()
                                 var downloadUrl = if (!rawInput.startsWith("http://", ignoreCase = true) && !rawInput.startsWith("https://", ignoreCase = true)) {
                                     "https://$rawInput"
+                                } else if (rawInput.startsWith("http://", ignoreCase = true)) {
+                                    // Cleartext HTTP is blocked by the app's network security config; upgrade to HTTPS.
+                                    "https://" + rawInput.substring(7)
                                 } else rawInput
 
                                 val lowerUrl = downloadUrl.lowercase()
@@ -678,7 +692,14 @@ fun WallpaperPickerScreen(
                                 connection.connectTimeout = 15000
                                 connection.readTimeout = 20000
                                 connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
-                                connection.setRequestProperty("Referer", "https://www.instagram.com/")
+                                // Only Instagram/Facebook CDNs need an Instagram Referer; don't leak it to other hosts.
+                                fun needsInstagramReferer(u: String): Boolean {
+                                    val h = try { URL(u).host.lowercase() } catch (_: Exception) { "" }
+                                    return h.contains("instagram") || h.contains("cdninstagram") || h.contains("fbcdn")
+                                }
+                                if (needsInstagramReferer(downloadUrl)) {
+                                    connection.setRequestProperty("Referer", "https://www.instagram.com/")
+                                }
                                 connection.setRequestProperty("Accept", "video/*,image/*,*/*;q=0.8")
                                 connection.connect()
 
@@ -686,10 +707,14 @@ fun WallpaperPickerScreen(
                                 if (code in 300..399) {
                                     val loc = connection.getHeaderField("Location")
                                     if (!loc.isNullOrBlank()) {
-                                        downloadUrl = loc
+                                        downloadUrl = if (loc.startsWith("http://", ignoreCase = true)) "https://" + loc.substring(7) else loc
                                         connection = URL(downloadUrl).openConnection() as HttpURLConnection
+                                        connection.connectTimeout = 15000
+                                        connection.readTimeout = 20000
                                         connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36")
-                                        connection.setRequestProperty("Referer", "https://www.instagram.com/")
+                                        if (needsInstagramReferer(downloadUrl)) {
+                                            connection.setRequestProperty("Referer", "https://www.instagram.com/")
+                                        }
                                         connection.connect()
                                         code = connection.responseCode
                                     }
@@ -715,17 +740,37 @@ fun WallpaperPickerScreen(
                                 tempFile = File(context.filesDir, "download_temp_${System.currentTimeMillis()}.tmp")
 
                                 var totalBytesRead = 0L
-                                val buffer = ByteArray(8192)
+                                val buffer = ByteArray(32 * 1024)
+                                val expectedBytes = connection.contentLengthLong // -1 when the server doesn't say
+                                if (expectedBytes > maxAllowedBytes) {
+                                    connection.disconnect()
+                                    withContext(Dispatchers.Main) { onError("File exceeds 100 MB size cap.") }
+                                    return@launch
+                                }
+                                var lastPercent = -1
 
                                 connection.inputStream.use { input ->
                                     FileOutputStream(tempFile).use { output ->
                                         var bytesRead: Int
                                         while (input.read(buffer).also { bytesRead = it } != -1) {
+                                            ensureActive() // lets the Cancel button stop the download promptly
                                             totalBytesRead += bytesRead
                                             if (totalBytesRead > maxAllowedBytes) {
                                                 throw IllegalStateException("File exceeds 100 MB size cap.")
                                             }
                                             output.write(buffer, 0, bytesRead)
+                                            if (expectedBytes > 0) {
+                                                val pct = ((totalBytesRead * 100) / expectedBytes).toInt().coerceIn(0, 100)
+                                                if (pct != lastPercent) {
+                                                    lastPercent = pct
+                                                    val mb = totalBytesRead / (1024f * 1024f)
+                                                    val totalMb = expectedBytes / (1024f * 1024f)
+                                                    withContext(Dispatchers.Main) {
+                                                        onFraction(pct / 100f)
+                                                        onProgress("Downloading %.1f / %.1f MB (%d%%)".format(mb, totalMb, pct))
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -773,6 +818,10 @@ fun WallpaperPickerScreen(
                                     showUrlDialog = false
                                     handleMediaSelected(stagingFile.absolutePath, finalType)
                                 }
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                // User pressed Cancel: remove the partial file and stay quiet.
+                                tempFile?.delete()
+                                throw e
                             } catch (e: Exception) {
                                 tempFile?.delete()
                                 withContext(Dispatchers.Main) {
@@ -1349,10 +1398,13 @@ private fun RecentCard(
 @Composable
 private fun UrlUploadDialog(
     onDismiss: () -> Unit,
-    onImport: (url: String, onError: (String) -> Unit, onProgress: (String) -> Unit) -> Unit
+    onCancelImport: () -> Unit,
+    onImport: (url: String, onError: (String) -> Unit, onProgress: (String) -> Unit, onFraction: (Float?) -> Unit) -> Unit
 ) {
     var inputUrl by remember { mutableStateOf("") }
     var dialogStatus by remember { mutableStateOf("") }
+    var statusIsError by remember { mutableStateOf(false) }
+    var progressFraction by remember { mutableStateOf<Float?>(null) }
     var isDownloading by remember { mutableStateOf(false) }
 
     val clipboardManager = LocalClipboardManager.current
@@ -1371,7 +1423,7 @@ private fun UrlUploadDialog(
     }
 
     AlertDialog(
-        onDismissRequest = { if (!isDownloading) onDismiss() },
+        onDismissRequest = { onDismiss() },
         title = {
             Text("Import from URL", color = Color.White, fontFamily = ManropeFamily, fontWeight = FontWeight.Bold)
         },
@@ -1426,21 +1478,34 @@ private fun UrlUploadDialog(
 
                 if (isDownloading) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = Color(0xFF93B5FF),
-                        trackColor = Color.White.copy(alpha = 0.1f)
-                    )
+                    val fraction = progressFraction
+                    if (fraction != null) {
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = Color(0xFF93B5FF),
+                            trackColor = Color.White.copy(alpha = 0.1f)
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = Color(0xFF93B5FF),
+                            trackColor = Color.White.copy(alpha = 0.1f)
+                        )
+                    }
                 }
 
                 if (dialogStatus.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         dialogStatus,
-                        color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds") || dialogStatus.contains("web page") || dialogStatus.contains("YouTube") || dialogStatus.contains("can't be played") || dialogStatus.contains("Tip:") || dialogStatus.contains("Couldn't read")) com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Danger else com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
+                        color = if (statusIsError) com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Danger else com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                         fontFamily = ManropeFamily,
                         fontSize = 12.sp
                     )
@@ -1451,15 +1516,22 @@ private fun UrlUploadDialog(
             Button(
                 onClick = {
                     isDownloading = true
+                    statusIsError = false
+                    progressFraction = null
+                    dialogStatus = ""
                     onImport(
                         inputUrl.trim(),
                         { err ->
                             dialogStatus = err
+                            statusIsError = true
+                            progressFraction = null
                             isDownloading = false
                         },
                         { msg ->
+                            statusIsError = false
                             dialogStatus = msg
-                        }
+                        },
+                        { fraction -> progressFraction = fraction }
                     )
                 },
                 enabled = inputUrl.isNotBlank() && !isDownloading
@@ -1469,10 +1541,20 @@ private fun UrlUploadDialog(
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss,
-                enabled = !isDownloading
+                onClick = {
+                    if (isDownloading) {
+                        // Stop the download but keep the dialog open so the link can be edited.
+                        onCancelImport()
+                        isDownloading = false
+                        progressFraction = null
+                        statusIsError = false
+                        dialogStatus = "Cancelled"
+                    } else {
+                        onDismiss()
+                    }
+                }
             ) {
-                Text("Cancel", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily)
+                Text(if (isDownloading) "Cancel download" else "Close", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily)
             }
         },
         containerColor = Color(0xFF141A29),
