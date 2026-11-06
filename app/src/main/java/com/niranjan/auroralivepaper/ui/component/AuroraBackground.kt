@@ -3,7 +3,13 @@ package com.niranjan.auroralivepaper.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -27,8 +33,8 @@ private val DeepElectricViolet = Color(0xFF651FFF)
 private val EmeraldMint = Color(0xFF00BFA5)
 private val AuroraTeal = Color(0xFF00E5FF)
 
-// ~24 fps is plenty for slow ambient motion and cuts CPU/GPU work by ~60% vs 60 fps.
-private const val FRAME_INTERVAL_NANOS = 41_000_000L
+// ~15 fps is plenty for slow ambient motion (peak speed ~2 px/frame) and cuts work ~75% vs 60 fps.
+private const val FRAME_INTERVAL_NANOS = 66_000_000L
 
 private data class StarParticle(
     val x: Float,
@@ -111,21 +117,80 @@ fun AuroraLivingBackground(
         )
     }
 
+    // Heavy part (3 gradient wave paths + vignette) is rasterised ONCE per size into a bitmap.
+    // Its motion is a GPU layer transform (slow drift + breathing) - no per-frame CPU drawing.
+    // Only the cheap stars/orbs are redrawn on the ~15 fps clock.
     Box(modifier = modifier.fillMaxSize()) {
-        Canvas(
+        Spacer(
             modifier = Modifier
                 .fillMaxSize()
                 .background(NearBlack)
-        ) {
+                .graphicsLayer {
+                    if (richMotion) {
+                        val nowSec = clockNanos.value / 1_000_000_000.0
+                        val phase = ((nowSec % 18.0) / 18.0).toFloat() * 6.2831855f * transitionBoost
+                        scaleX = 1.12f
+                        scaleY = 1.12f
+                        translationX = sin(phase) * size.width * 0.04f
+                        translationY = sin(phase * 0.7f + 1.3f) * size.height * 0.02f
+                    }
+                }
+                .drawWithCache {
+                    val bitmap = ImageBitmap(
+                        size.width.toInt().coerceAtLeast(1),
+                        size.height.toInt().coerceAtLeast(1)
+                    )
+                    CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bitmap), size) {
+                        drawAuroraWaves(vignetteBrush)
+                    }
+                    onDrawBehind { drawImage(bitmap) }
+                }
+        )
+        Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
 
             val nowSec = clockNanos.value / 1_000_000_000.0
-            val twoPi = 6.2831855f
-            val basePhase = ((nowSec % 18.0) / 18.0).toFloat() * twoPi
-            val twinklePhase = ((nowSec % 3.2) / 3.2).toFloat() * twoPi
+            val twinklePhase = ((nowSec % 3.2) / 3.2).toFloat() * 6.2831855f
             val orbDrift = ((nowSec % 24.0) / 24.0).toFloat()
-            val dynamicPhase = if (richMotion) basePhase * transitionBoost else 0.0f
+
+            for (star in distantStars) {
+                val twinkle = ((0.5f * sin(twinklePhase + star.phase).coerceIn(0.0f, 1.0f)) + 0.2f).coerceIn(0.15f, 0.75f)
+                drawCircle(
+                    color = Color.White.copy(alpha = twinkle),
+                    radius = star.radius.dp.toPx(),
+                    center = Offset(star.x * w, star.y * h)
+                )
+            }
+
+            if (richMotion) {
+                for (bokehOrb in bokehOrbs) {
+                    val initialY = (((bokehOrb.initialY - (((orbDrift * bokehOrb.driftSpeed) * 8.0f) * transitionBoost)) % 1.0f) + 1.0f) % 1.0f
+                    val rPx = bokehOrb.radius.dp.toPx()
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                bokehOrb.color.copy(alpha = 0.16f),
+                                bokehOrb.color.copy(alpha = 0.05f),
+                                Color.Transparent
+                            ),
+                            radius = rPx
+                        ),
+                        radius = rPx,
+                        center = Offset(bokehOrb.x * w, h * initialY)
+                    )
+                }
+            }
+
+        }
+        content()
+    }
+}
+
+private fun DrawScope.drawAuroraWaves(vignetteBrush: Brush) {
+    val w = size.width
+    val h = size.height
+    val dynamicPhase = 0.0f
 
             val path1 = Path()
             val path2 = Path()
@@ -156,7 +221,7 @@ fun AuroraLivingBackground(
                     start = Offset((-w) * 0.1f, h * 0.15f),
                     end = Offset(w * 1.1f, h * 0.6f)
                 ),
-                blendMode = BlendMode.Screen
+                blendMode = BlendMode.SrcOver
             )
 
             val p2 = (0.85f * dynamicPhase) + 1.6f
@@ -184,7 +249,7 @@ fun AuroraLivingBackground(
                     start = Offset((-w) * 0.1f, 0.35f * h),
                     end = Offset(w * 1.1f, h * 0.75f)
                 ),
-                blendMode = BlendMode.Screen
+                blendMode = BlendMode.SrcOver
             )
 
             val p3 = (dynamicPhase * 0.7f) + 3.1f
@@ -212,41 +277,9 @@ fun AuroraLivingBackground(
                     start = Offset((-w) * 0.1f, 0.55f * h),
                     end = Offset(w * 1.1f, 0.95f * h)
                 ),
-                blendMode = BlendMode.Screen
+                blendMode = BlendMode.SrcOver
             )
-
-            for (star in distantStars) {
-                val twinkle = ((0.5f * sin(twinklePhase + star.phase).coerceIn(0.0f, 1.0f)) + 0.2f).coerceIn(0.15f, 0.75f)
-                drawCircle(
-                    color = Color.White.copy(alpha = twinkle),
-                    radius = star.radius.dp.toPx(),
-                    center = Offset(star.x * w, star.y * h)
-                )
-            }
-
-            if (richMotion) {
-                for (bokehOrb in bokehOrbs) {
-                    val initialY = (((bokehOrb.initialY - (((orbDrift * bokehOrb.driftSpeed) * 8.0f) * transitionBoost)) % 1.0f) + 1.0f) % 1.0f
-                    val rPx = bokehOrb.radius.dp.toPx()
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                bokehOrb.color.copy(alpha = 0.16f),
-                                bokehOrb.color.copy(alpha = 0.05f),
-                                Color.Transparent
-                            ),
-                            radius = rPx
-                        ),
-                        radius = rPx,
-                        center = Offset(bokehOrb.x * w, h * initialY)
-                    )
-                }
-            }
-
-            drawRect(brush = vignetteBrush)
-        }
-        content()
-    }
+    drawRect(brush = vignetteBrush)
 }
 
 @Composable

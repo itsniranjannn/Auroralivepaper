@@ -41,6 +41,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Lets a debug build install next to the signed release app without uninstalling it.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
