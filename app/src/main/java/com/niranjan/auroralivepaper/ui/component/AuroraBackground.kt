@@ -1,18 +1,14 @@
 package com.niranjan.auroralivepaper.ui.components
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -30,6 +26,9 @@ private val BioluminescentCyan = Color(0xFF4DD0E1)
 private val DeepElectricViolet = Color(0xFF651FFF)
 private val EmeraldMint = Color(0xFF00BFA5)
 private val AuroraTeal = Color(0xFF00E5FF)
+
+// ~24 fps is plenty for slow ambient motion and cuts CPU/GPU work by ~60% vs 60 fps.
+private const val FRAME_INTERVAL_NANOS = 41_000_000L
 
 private data class StarParticle(
     val x: Float,
@@ -55,34 +54,22 @@ fun AuroraLivingBackground(
     val context = LocalContext.current
     val richMotion = remember(context) { SettingsPrefs.richMotion(context) }
 
-    val infinite = rememberInfiniteTransition("livingAuroraMotion")
-    val basePhase by infinite.animateFloat(
-        initialValue = 0.0f,
-        targetValue = 6.2831855f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(18000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "auroraBasePhase"
-    )
-    val twinklePhase by infinite.animateFloat(
-        initialValue = 0.0f,
-        targetValue = 6.2831855f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "starTwinkle"
-    )
-    val orbDrift by infinite.animateFloat(
-        initialValue = 0.0f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(24000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "bokehDrift"
-    )
+    // Single throttled clock (~24 fps). It is read ONLY inside the Canvas draw lambda, so each
+    // tick invalidates drawing only and never recomposes the app content wrapped by this
+    // background. When rich motion is off no clock runs at all and the background is static.
+    val clockNanos = remember { mutableStateOf(0L) }
+    LaunchedEffect(richMotion) {
+        if (!richMotion) return@LaunchedEffect
+        var last = 0L
+        while (true) {
+            withFrameNanos { now ->
+                if (now - last >= FRAME_INTERVAL_NANOS) {
+                    last = now
+                    clockNanos.value = now
+                }
+            }
+        }
+    }
 
     val distantStars = remember {
         val rand = Random(42)
@@ -124,8 +111,6 @@ fun AuroraLivingBackground(
         )
     }
 
-    val dynamicPhase = if (richMotion) basePhase * transitionBoost else 0.0f
-
     Box(modifier = modifier.fillMaxSize()) {
         Canvas(
             modifier = Modifier
@@ -134,6 +119,13 @@ fun AuroraLivingBackground(
         ) {
             val w = size.width
             val h = size.height
+
+            val nowSec = clockNanos.value / 1_000_000_000.0
+            val twoPi = 6.2831855f
+            val basePhase = ((nowSec % 18.0) / 18.0).toFloat() * twoPi
+            val twinklePhase = ((nowSec % 3.2) / 3.2).toFloat() * twoPi
+            val orbDrift = ((nowSec % 24.0) / 24.0).toFloat()
+            val dynamicPhase = if (richMotion) basePhase * transitionBoost else 0.0f
 
             val path1 = Path()
             val path2 = Path()

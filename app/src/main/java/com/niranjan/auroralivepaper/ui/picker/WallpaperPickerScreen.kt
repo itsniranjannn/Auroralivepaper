@@ -854,6 +854,7 @@ suspend fun validateStagedMedia(context: Context, stagingPath: String, mediaType
 
     var retriever: MediaMetadataRetriever? = null
     var extractor: MediaExtractor? = null
+    var videoMime: String? = null
 
     try {
         if (mediaType == "image") {
@@ -881,6 +882,7 @@ suspend fun validateStagedMedia(context: Context, stagingPath: String, mediaType
                         val format = extractor.getTrackFormat(i)
                         val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
                         if (mime.startsWith("video/")) {
+                            videoMime = mime
                             if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) {
                                 fps = try {
                                     format.getInteger(MediaFormat.KEY_FRAME_RATE).toFloat()
@@ -901,7 +903,12 @@ suspend fun validateStagedMedia(context: Context, stagingPath: String, mediaType
         try { extractor?.release() } catch (_: Throwable) {}
     }
 
-    MediaValidator.evaluate(width, height, fps, durationMs, sizeBytes)
+    val warnings = MediaValidator.evaluate(width, height, fps, durationMs, sizeBytes).toMutableList()
+    if (mediaType == "video") {
+        // Decoder-capability warnings go first: they predict real stutter on THIS device.
+        warnings.addAll(0, com.niranjan.auroralivepaper.util.VideoPlaybackCheck.evaluate(videoMime, width, height, fps))
+    }
+    warnings
 }
 
 private fun detectRealFileType(file: File): String? {
@@ -1204,7 +1211,13 @@ private fun RecentCard(
                 } else {
                     val mmr = MediaMetadataRetriever()
                     mmr.setDataSource(recent.path)
-                    val frame = mmr.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: mmr.getFrameAtTime(0L)
+                    // Decode a small frame (tile is ~110dp). Full-resolution frames cost ~8 MB each.
+                    val frame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        mmr.getScaledFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 360, 360)
+                            ?: mmr.getScaledFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 360, 360)
+                    } else {
+                        mmr.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC) ?: mmr.getFrameAtTime(0L)
+                    }
                     mmr.release()
                     frame
                 }
@@ -1572,7 +1585,15 @@ fun removeRecentWallpaper(context: Context, path: String) {
 }
 
 fun addRecentWallpaper(context: Context, path: String, type: String) {
-    val current = getRecentWallpapers(context).filter { it.path != path }.toMutableList()
+    // Re-applying the same file creates a new recent_<ts> copy each time; drop older copies with the
+    // same type and byte size so the 3 tiles are distinct and duplicate files don't eat storage.
+    val newSize = File(path).length()
+    val all = getRecentWallpapers(context)
+    all.filter { it.path != path && it.type == type && newSize > 0L && File(it.path).length() == newSize }
+        .forEach { File(it.path).delete() }
+    val current = all.filter { old ->
+        old.path != path && !(old.type == type && newSize > 0L && !File(old.path).exists())
+    }.toMutableList()
     current.add(0, RecentWallpaper(path, type, System.currentTimeMillis()))
 
     // Total storage cap for recents (150 MB)

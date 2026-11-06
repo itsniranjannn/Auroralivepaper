@@ -65,16 +65,9 @@ fun SettingsAuroraBackground(content: @Composable () -> Unit) {
     val context = LocalContext.current
     val richMotion = remember(context) { SettingsPrefs.richMotion(context) }
 
-    val infinite = rememberInfiniteTransition(label = "settingsFlow")
-    val animatedDrift by infinite.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(24000, easing = LinearEasing),
-            RepeatMode.Reverse
-        ),
-        label = "drift"
-    )
-    val drift = if (richMotion) animatedDrift else 0f
+    // Static backdrop: the old 24 s drift moved ~10% of the width (imperceptible) but forced
+    // a full redraw every frame. The app-wide living background already supplies ambient motion.
+    val drift = 0.3f
 
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize().background(NearBlack)) {

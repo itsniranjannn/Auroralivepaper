@@ -164,9 +164,18 @@ class AuroraWallpaperService : WallpaperService() {
             return SettingsPrefs.scalingMode(applicationContext)
         }
 
+        // Last scaling mode pushed to the current MediaPlayer. updatePlayerSettings() runs often
+        // (every 800 ms while locked, on every pref change), and re-setting the scaling mode on a
+        // live decoder surface is wasted work that can cause a visible hitch.
+        private var appliedScalingPlayer: MediaPlayer? = null
+        private var appliedScalingMode: String? = null
+
         private fun applyVideoScalingMode(mp: MediaPlayer) {
             try {
                 val mode = getScalingMode()
+                if (appliedScalingPlayer === mp && appliedScalingMode == mode) return
+                appliedScalingPlayer = mp
+                appliedScalingMode = mode
                 if (mode == "fit") {
                     mp.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT)
                 } else {
@@ -219,8 +228,12 @@ class AuroraWallpaperService : WallpaperService() {
                             updatePlaybackState()
                         }
                         Intent.ACTION_BATTERY_CHANGED -> {
+                            // Battery broadcasts fire on every % / voltage / temperature tick.
+                            // Only re-evaluate playback when the low-battery verdict actually flips,
+                            // otherwise we re-apply player settings for nothing (wakeups + hiccups).
+                            val wasLow = isBatteryLow
                             updateBatteryLow(intent)
-                            updatePlaybackState()
+                            if (wasLow != isBatteryLow) updatePlaybackState()
                         }
                         Intent.ACTION_SCREEN_OFF -> {
                             // User locked or screen turned off -> strictly mute and flag as not unlocked
@@ -371,6 +384,8 @@ class AuroraWallpaperService : WallpaperService() {
                     if (mediaPlayer != null) {
                         try {
                             mediaPlayer?.setSurface(holder.surface)
+                            // New/changed surface: scaling mode must be re-applied to it.
+                            appliedScalingMode = null
                             mediaPlayer?.let { applyVideoScalingMode(it) }
                         } catch (e: Throwable) {
                             recoverPlayer("onSurfaceChanged setSurface: ${e.message}")

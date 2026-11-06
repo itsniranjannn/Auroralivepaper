@@ -99,11 +99,14 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val transitionBoost = remember { Animatable(1.0f) }
                 val scope = rememberCoroutineScope()
+                // The animated intro is shown once (first launch). Later launches go straight home.
+                val introPrefs = remember { getSharedPreferences("aurora_prefs", MODE_PRIVATE) }
+                val showIntro = remember { !introPrefs.getBoolean("intro_seen", false) }
 
                 AuroraLivingBackground(transitionBoost = transitionBoost.value) {
                     NavHost(
                         navController = navController,
-                        startDestination = "intro",
+                        startDestination = if (showIntro) "intro" else "home",
                         modifier = Modifier.fillMaxSize()
                     ) {
                         composable("intro") {
@@ -115,6 +118,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onFinished = {
+                                    introPrefs.edit().putBoolean("intro_seen", true).apply()
                                     navController.navigate("home") {
                                         popUpTo("intro") { inclusive = true }
                                     }
@@ -138,8 +142,11 @@ class MainActivity : ComponentActivity() {
                             }
                         ) {
                             val haptic = LocalHapticFeedback.current
+                            val hapticContext = LocalContext.current
                             LaunchedEffect(Unit) {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (SettingsPrefs.hapticsEnabled(hapticContext)) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
                             }
 
                             Scaffold(

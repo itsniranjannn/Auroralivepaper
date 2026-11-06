@@ -100,20 +100,34 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                                 Spacer(modifier = Modifier.width(10.dp))
+                                val isActive = remember { com.niranjan.auroralivepaper.ui.picker.isAuroraWallpaperActive(context) }
+                                val badgeColor = if (isActive) Color(0xFF7CE7D7) else Color(0xFFFFB74D)
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(50))
-                                        .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
+                                        .background(badgeColor.copy(alpha = 0.15f))
                                         .padding(horizontal = 8.dp, vertical = 3.dp)
                                 ) {
-                                    Text("Applied", color = Color(0xFF7CE7D7), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        if (isActive) "Applied" else "Saved, not applied",
+                                        color = badgeColor,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
                             Spacer(modifier = Modifier.height(10.dp))
-                            InfoLine("Home + Lock")
-                            InfoLine("Muted")
-                            InfoLine("Resolution: Auto")
-                            InfoLine("Updated just now")
+                            val soundOn = com.niranjan.auroralivepaper.data.SettingsPrefs.playWallpaperSound(context)
+                            val scaling = com.niranjan.auroralivepaper.data.SettingsPrefs.scalingMode(context)
+                            val modified = remember(mediaPath) {
+                                val f = java.io.File(mediaPath)
+                                if (f.exists()) java.text.DateFormat.getDateTimeInstance(
+                                    java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT
+                                ).format(java.util.Date(f.lastModified())) else null
+                            }
+                            InfoLine(if (soundOn) "Sound on (home screen only)" else "Muted")
+                            InfoLine(if (scaling == "fit") "Scaling: Fit" else "Scaling: Fill")
+                            if (modified != null) InfoLine("Updated $modified")
                         }
                     }
                 }
@@ -122,7 +136,7 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
             Spacer(modifier = Modifier.height(20.dp))
 
             fadeSlide(show1) {
-                SettingsCategoryCard(Icons.Filled.VideoLibrary, "Wallpaper", "Playback, quality and audio") { onNavigate("settings_wallpaper") }
+                SettingsCategoryCard(Icons.Filled.VideoLibrary, "Wallpaper", "Playback, scaling and audio") { onNavigate("settings_wallpaper") }
             }
             Spacer(modifier = Modifier.height(12.dp))
             fadeSlide(show2) {
