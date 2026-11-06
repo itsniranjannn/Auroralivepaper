@@ -385,7 +385,7 @@ fun WallpaperPickerScreen(
 
             Text(
                 "Every unlock, a little more yours.",
-                color = Color.White.copy(alpha = 0.65f),
+                color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary,
                 fontFamily = ManropeFamily,
                 fontSize = 12.sp,
                 modifier = Modifier
@@ -439,13 +439,13 @@ fun WallpaperPickerScreen(
                         .fillMaxWidth()
                         .height(70.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0xFF7CE7D7).copy(alpha = 0.15f))
-                        .border(2.dp, Color(0xFF7CE7D7), RoundedCornerShape(18.dp)),
+                        .background(com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint.copy(alpha = 0.15f))
+                        .border(2.dp, com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint, RoundedCornerShape(18.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         "Drop wallpaper file here",
-                        color = Color(0xFF7CE7D7),
+                        color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                         fontFamily = ManropeFamily,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
@@ -805,7 +805,7 @@ fun WallpaperPickerScreen(
                             validationWarnings.forEach { warning ->
                                 Text(
                                     "• $warning",
-                                    color = Color(0xFFFFB74D),
+                                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Warning,
                                     fontFamily = ManropeFamily,
                                     fontSize = 12.sp,
                                     modifier = Modifier.padding(vertical = 2.dp)
@@ -834,7 +834,7 @@ fun WallpaperPickerScreen(
                                 validationWarnings = emptyList()
                             }
                         ) {
-                            Text("Cancel", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily)
+                            Text("Cancel", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily)
                         }
                     },
                     containerColor = Color(0xFF141A29),
@@ -1049,7 +1049,7 @@ private fun HeroNowPlayingCard(
             ) {
                 Text(
                     "Now Playing",
-                    color = Color.White.copy(alpha = 0.65f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary,
                     fontFamily = ManropeFamily,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
@@ -1145,7 +1145,7 @@ private fun HeroNowPlayingCard(
                             fontSize = 15.sp
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text("Tap to preview & manage", color = Color.White.copy(alpha = 0.65f), fontFamily = ManropeFamily, fontSize = 11.sp)
+                        Text("Tap to preview & manage", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily, fontSize = 11.sp)
                     }
 
                     Box(
@@ -1185,7 +1185,7 @@ private fun HeroNowPlayingCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     "Choose a video, GIF, or image below to bring your screen to life.",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary,
                     fontFamily = ManropeFamily,
                     fontSize = 11.sp
                 )
@@ -1359,12 +1359,12 @@ private fun UrlUploadDialog(
         },
         text = {
             Column {
-                Text("Enter direct video/image URL or Instagram post link (HTTPS only, max 100 MB).", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily, fontSize = 13.sp)
+                Text("Enter direct video/image URL or Instagram post link (HTTPS only, max 100 MB).", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
                     value = inputUrl,
                     onValueChange = { inputUrl = it },
-                    placeholder = { Text("https://example.com/video.mp4", color = Color.White.copy(alpha = 0.35f), fontFamily = ManropeFamily) },
+                    placeholder = { Text("https://example.com/video.mp4", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary, fontFamily = ManropeFamily) },
                     singleLine = true,
                     enabled = !isDownloading,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1422,7 +1422,7 @@ private fun UrlUploadDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         dialogStatus,
-                        color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds") || dialogStatus.contains("web page") || dialogStatus.contains("YouTube") || dialogStatus.contains("can't be played") || dialogStatus.contains("Tip:") || dialogStatus.contains("Couldn't read")) Color(0xFFFF7675) else Color(0xFF7CE7D7),
+                        color = if (dialogStatus.contains("failed") || dialogStatus.contains("error") || dialogStatus.contains("exceeds") || dialogStatus.contains("web page") || dialogStatus.contains("YouTube") || dialogStatus.contains("can't be played") || dialogStatus.contains("Tip:") || dialogStatus.contains("Couldn't read")) com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Danger else com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                         fontFamily = ManropeFamily,
                         fontSize = 12.sp
                     )
@@ -1454,7 +1454,7 @@ private fun UrlUploadDialog(
                 onClick = onDismiss,
                 enabled = !isDownloading
             ) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.7f), fontFamily = ManropeFamily)
+                Text("Cancel", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontFamily = ManropeFamily)
             }
         },
         containerColor = Color(0xFF141A29),

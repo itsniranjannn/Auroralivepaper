@@ -25,10 +25,10 @@ fun AuroraGradientText(
     )
     val brush = Brush.horizontalGradient(
         colors = listOf(
-            Color(0xFF7CE7D7), // Vibrant Teal
+            com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint, // Vibrant Teal
             Color(0xFFB38CFF), // Soft Lavender
             Color(0xFF82B1FF), // Electric Periwinkle
-            Color(0xFF7CE7D7)
+            com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint
         ),
         startX = shift * 200f,
         endX = shift * 200f + 400f

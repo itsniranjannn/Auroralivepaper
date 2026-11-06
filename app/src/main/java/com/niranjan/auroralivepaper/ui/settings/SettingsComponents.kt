@@ -155,7 +155,7 @@ fun SettingsCategoryCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(subtitle, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                Text(subtitle, color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary, fontSize = 12.sp)
             }
             Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color.White.copy(alpha = 0.4f))
         }
@@ -184,7 +184,7 @@ fun SettingsHeader(icon: ImageVector, title: String, subtitle: String, onBack: (
         Spacer(modifier = Modifier.width(10.dp))
         Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
     }
-    Text(subtitle, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp)
+    Text(subtitle, color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary, fontSize = 13.sp)
     Spacer(modifier = Modifier.height(20.dp))
 }
 
@@ -204,7 +204,7 @@ fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) 
             .padding(16.dp)
     ) {
         Column {
-            Text(title, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            Text(title, color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.height(10.dp))
             content()
         }

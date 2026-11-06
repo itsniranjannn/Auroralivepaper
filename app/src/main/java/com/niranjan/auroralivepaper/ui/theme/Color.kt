@@ -17,3 +17,17 @@ val AuroraTeal = AuroraStormyTeal
 val AuroraCoral = AuroraFrostedBlue
 val AuroraBackground = AuroraBackgroundDark
 val AuroraSurface = AuroraSurfaceIndigo
+
+/**
+ * Single source of truth for UI colors. Screens should use these instead of raw Color(0x...) values.
+ * Text tiers are tuned for readable contrast (>= 4.5:1) on the near-black Aurora background.
+ */
+object AuroraTokens {
+    val Mint = Color(0xFF7CE7D7)       // success / active / accent
+    val Danger = Color(0xFFFF7675)     // destructive actions
+    val Warning = Color(0xFFFFB74D)    // paused / not applied / caution
+
+    val TextPrimary = Color.White.copy(alpha = 0.95f)
+    val TextSecondary = Color.White.copy(alpha = 0.75f)
+    val TextTertiary = Color.White.copy(alpha = 0.62f)
+}

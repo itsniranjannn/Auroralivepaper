@@ -62,7 +62,7 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
             Text("Settings", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 30.sp)
             Text(
                 "Personalize your experience.",
-                color = Color.White.copy(alpha = 0.55f),
+                color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary,
                 fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -85,7 +85,7 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                         .padding(18.dp)
                 ) {
                     Column {
-                        Text("Current Wallpaper", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                        Text("Current Wallpaper", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(10.dp))
                         if (mediaPath == null) {
                             Text("No wallpaper set yet", color = Color.White, fontWeight = FontWeight.Medium)
@@ -101,7 +101,7 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                                 Text(label, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 val isActive = remember { com.niranjan.auroralivepaper.ui.picker.isAuroraWallpaperActive(context) }
-                                val badgeColor = if (isActive) Color(0xFF7CE7D7) else Color(0xFFFFB74D)
+                                val badgeColor = if (isActive) com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint else com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Warning
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(50))
@@ -162,7 +162,7 @@ fun SettingsScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
 @Composable
 private fun InfoLine(text: String) {
-    Text(text, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+    Text(text, color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary, fontSize = 12.sp)
 }
 
 @Composable

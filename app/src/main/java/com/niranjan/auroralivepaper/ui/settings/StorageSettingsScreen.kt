@@ -72,7 +72,7 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
                             .fillMaxHeight()
                             .fillMaxWidth(progress)
                             .clip(RoundedCornerShape(50))
-                            .background(Color(0xFF7CE7D7))
+                            .background(com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint)
                     )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -96,11 +96,11 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
                         contentDescription = "Clear Staging Cache",
-                        tint = Color(0xFFFF7675),
+                        tint = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Danger,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Clear Staging Cache", color = Color(0xFFFF7675), fontWeight = FontWeight.SemiBold)
+                    Text("Clear Staging Cache", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Danger, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -113,6 +113,6 @@ fun StorageSettingsScreen(onBack: () -> Unit) {
 private fun StorageRow(label: String, bytes: Long) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(label, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, modifier = Modifier.weight(1f))
-        Text("%.1f MB".format(bytes / (1024f * 1024f)), color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
+        Text("%.1f MB".format(bytes / (1024f * 1024f)), color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary, fontSize = 13.sp)
     }
 }

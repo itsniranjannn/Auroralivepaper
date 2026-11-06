@@ -58,7 +58,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
 
                 Text(
                     text = "Sound only plays on the Home Screen when unlocked. Lock screen is automatically kept quiet.",
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary,
                     fontFamily = ManropeFamily,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(top = 4.dp, start = 4.dp, end = 4.dp)
@@ -80,7 +80,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                         )
                         Text(
                             "${(volume * 100).roundToInt()}%",
-                            color = Color(0xFF7CE7D7),
+                            color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                             fontFamily = ManropeFamily,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
@@ -97,8 +97,8 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                         },
                         valueRange = 0f..1f,
                         colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF7CE7D7),
-                            activeTrackColor = Color(0xFF7CE7D7),
+                            thumbColor = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
+                            activeTrackColor = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                             inactiveTrackColor = Color.White.copy(alpha = 0.2f)
                         ),
                         modifier = Modifier.fillMaxWidth()
@@ -108,7 +108,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "Note: Wallpaper audio level operates independently from phone ringer/notification volume.",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary,
                     fontFamily = ManropeFamily,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp)
@@ -129,7 +129,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "Fill zooms to eliminate black bars. Fit displays the full original video without cropping any edges.",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary,
                     fontFamily = ManropeFamily,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp)
@@ -148,7 +148,7 @@ fun WallpaperSettingsScreen(onBack: () -> Unit) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         "Some launchers support wallpaper scrolling. Enable scrolling in your launcher for a parallax effect.",
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary,
                         fontFamily = ManropeFamily,
                         fontSize = 12.sp
                     )

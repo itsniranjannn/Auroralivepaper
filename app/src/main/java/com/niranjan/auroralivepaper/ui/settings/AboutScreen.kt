@@ -39,7 +39,7 @@ fun AboutScreen(onBack: () -> Unit) {
             SettingsSection("Diagnostics") {
                 Text(
                     "Export runtime engine events, recovery attempts, and power state changes for debugging.",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary,
                     fontSize = 13.sp,
                     fontFamily = ManropeFamily
                 )
@@ -87,7 +87,7 @@ fun AboutScreen(onBack: () -> Unit) {
             SettingsSection("Privacy") {
                 Text(
                     "Aurora never sends your media anywhere. Everything you choose stays on your device.",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary,
                     fontSize = 13.sp
                 )
             }
@@ -98,7 +98,7 @@ fun AboutScreen(onBack: () -> Unit) {
                     "AndroidX Navigation",
                     "Manrope typeface (SIL OFL)"
                 ).forEach {
-                    Text("• $it", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Text("• $it", color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextSecondary, fontSize = 13.sp)
                 }
             }
 
@@ -117,7 +117,7 @@ fun AboutScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Designed & Developed by Niranjan.K",
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.TextTertiary,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )

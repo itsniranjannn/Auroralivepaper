@@ -232,7 +232,7 @@ fun PreviewScreen(
                             Icon(
                                 imageVector = if (scalingMode == "fit") Icons.Filled.FitScreen else Icons.Filled.CropFree,
                                 contentDescription = "Scale Mode",
-                                tint = Color(0xFF7CE7D7),
+                                tint = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -263,7 +263,7 @@ fun PreviewScreen(
                             Icon(
                                 imageVector = if (isSoundOn) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                                 contentDescription = "Toggle sound",
-                                tint = if (isSoundOn) Color(0xFF7CE7D7) else Color.White.copy(alpha = 0.6f),
+                                tint = if (isSoundOn) com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint else Color.White.copy(alpha = 0.6f),
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -314,7 +314,7 @@ fun PreviewScreen(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = null,
-                                    tint = Color(0xFF7CE7D7),
+                                    tint = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -330,8 +330,8 @@ fun PreviewScreen(
                                         .weight(1f)
                                         .height(24.dp),
                                     colors = SliderDefaults.colors(
-                                        thumbColor = Color(0xFF7CE7D7),
-                                        activeTrackColor = Color(0xFF7CE7D7),
+                                        thumbColor = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
+                                        activeTrackColor = com.niranjan.auroralivepaper.ui.theme.AuroraTokens.Mint,
                                         inactiveTrackColor = Color.White.copy(alpha = 0.2f)
                                     )
                                 )

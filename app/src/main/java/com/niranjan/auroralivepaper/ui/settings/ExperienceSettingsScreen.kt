@@ -33,9 +33,8 @@ fun ExperienceSettingsScreen(onBack: () -> Unit) {
                 }
             }
             SettingsSection("Appearance") {
-                Text("Aurora Dark", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Aurora Dark theme", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Light Mode — Coming Soon", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp)
             }
         }
     }
