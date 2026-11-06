@@ -919,7 +919,8 @@ class AuroraWallpaperService : WallpaperService() {
             if (!holder.surface.isValid) return
             var canvas: Canvas? = null
             try {
-                val c = holder.lockCanvas()
+                // Hardware canvas: GPU does the up-scaling instead of the CPU (API 26+, our minSdk).
+                val c = holder.lockHardwareCanvas()
                 if (c == null) return
                 canvas = c
                 val iw = d.intrinsicWidth
