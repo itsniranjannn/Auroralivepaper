@@ -164,6 +164,7 @@ fun WallpaperPickerScreen(
             activeWallpaperInfo = try { wm.wallpaperInfo } catch (e: Exception) { null }
             activePath = prefs.getString("media_path", null)
             activeType = prefs.getString("media_type", "video")
+            recentsList = getRecentWallpapers(context)
         }
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         onDispose {
@@ -171,8 +172,17 @@ fun WallpaperPickerScreen(
         }
     }
 
+    // Re-read everything when the app resumes (e.g. back from the system wallpaper chooser). The new
+    // wallpaper is saved on a background thread AFTER we navigate home, so the first read can be stale.
+    val resumeTick by com.niranjan.auroralivepaper.util.HomeRefresh.tick.collectAsState()
+    LaunchedEffect(resumeTick) {
+        activePath = prefs.getString("media_path", null)
+        activeType = prefs.getString("media_type", "video")
+        recentsList = getRecentWallpapers(context)
+    }
+
     val liveEngines by AuroraWallpaperService.activeEngineCount.collectAsState()
-    val isOurWallpaperActive = remember(liveEngines) { liveEngines > 0 || isAuroraWallpaperActive(context) }
+    val isOurWallpaperActive = remember(liveEngines, resumeTick) { liveEngines > 0 || isAuroraWallpaperActive(context) }
 
     LaunchedEffect(Unit) {
         val richMotion = SettingsPrefs.richMotion(context)

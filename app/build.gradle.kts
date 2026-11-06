@@ -47,6 +47,8 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
+            // Optional: -PreleaseIdSuffix=.rel installs a test release next to the real app.
+            (project.findProperty("releaseIdSuffix") as String?)?.let { applicationIdSuffix = it }
             // Sign only when a keystore is configured, so other machines / CI can still build.
             signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
             isMinifyEnabled = true

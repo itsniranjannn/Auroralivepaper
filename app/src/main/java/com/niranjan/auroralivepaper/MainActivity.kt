@@ -410,5 +410,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         checkedPickerReturn = false
+        com.niranjan.auroralivepaper.util.HomeRefresh.bump()
     }
 }
